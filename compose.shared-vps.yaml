@@ -1,0 +1,58 @@
+name: filmiliar
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: filmiliar
+      POSTGRES_USER: filmiliar
+      POSTGRES_PASSWORD: ${FILMILIAR_DB_PASSWORD:?Set FILMILIAR_DB_PASSWORD in the private VPS env file}
+    volumes:
+      - filmiliar_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U filmiliar -d filmiliar"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    mem_limit: 768m
+    cpus: 0.5
+    security_opt:
+      - no-new-privileges:true
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DATABASE_URL: postgresql://filmiliar:${FILMILIAR_DB_PASSWORD}@db:5432/filmiliar?schema=public
+      JWT_SECRET: ${FILMILIAR_JWT_SECRET:?Set FILMILIAR_JWT_SECRET in the private VPS env file}
+      CORS_ORIGIN: ${FILMILIAR_CORS_ORIGIN:-http://localhost:5173}
+      STORAGE_MODE: local
+      ENABLE_UPLOADS: "false"
+      DEMO_CATALOG: "true"
+    ports:
+      - "127.0.0.1:3081:5000"
+    volumes:
+      - filmiliar_uploads:/app/uploads
+    mem_limit: 768m
+    cpus: 1.0
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+
+volumes:
+  filmiliar_db:
+  filmiliar_uploads:

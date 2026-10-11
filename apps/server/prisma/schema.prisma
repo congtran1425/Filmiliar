@@ -1,0 +1,191 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+  TECHNICIAN
+}
+
+enum KycStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum ItemStatus {
+  AVAILABLE
+  RENTED
+  MAINTENANCE
+  SOLD
+}
+
+enum BookingStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  ACTIVE_RENTAL
+  RETURNED_PENDING_INSPECTION
+  COMPLETED
+  CANCELLED
+}
+
+enum DepositStatus {
+  PENDING
+  HELD
+  REFUNDED
+  DEDUCTED
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  DELIVERING
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id              String          @id @default(uuid())
+  email           String          @unique
+  passwordHash    String
+  fullName        String
+  phone           String?
+  address         String?
+  role            Role            @default(CUSTOMER)
+  
+  // eKYC fields
+  kycStatus       KycStatus       @default(UNVERIFIED)
+  idCardNumber    String?
+  idCardFrontUrl  String?
+  idCardBackUrl   String?
+  eSignatureUrl   String?
+  
+  rentals         RentalBooking[]
+  orders          Order[]
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  products    Product[]
+  createdAt   DateTime  @default(now())
+}
+
+// Cấp độ 1: Dòng sản phẩm (Product Models)
+model Product {
+  id                 Int          @id @default(autoincrement())
+  modelName          String       // Tên dòng máy (Sony Alpha A7 IV...)
+  slug               String       @unique
+  brand              String       // Sony, Fujifilm, Canon...
+  categoryName       String       // Mirrorless, Compact/Vlog, Lens
+  categoryId         String?
+  category           Category?    @relation(fields: [categoryId], references: [id])
+  
+  sensorType         String       @default("APS-C") // Full-Frame, APS-C, Không áp dụng
+  resolutionMp       Float?       // Megapixels (null đối với Lens)
+  videoSpecs         String?      // Thông số quay video (4K 60p, 10-bit 4:2:2...)
+  hasIbis            Boolean      @default(false)   // Chống rung cảm biến
+  weightGrams        Int          // Trọng lượng (gam)
+  recommendedPurpose String       // Mục đích dùng (Quiz): Đi concert, du lịch, vlog...
+  dailyRentalRate    Int          // Giá thuê tham chiếu / ngày (VND)
+  referenceUsedPrice BigInt       // Giá tham chiếu máy cũ (VND)
+  thumbnailUrl       String?
+  
+  units              CameraItem[]
+  
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@index([categoryId])
+}
+
+// Cấp độ 2: Hồ sơ từng con máy cụ thể (Physical Instances & Technical Passport)
+model CameraItem {
+  id                 Int             @id @default(autoincrement())
+  modelId            Int
+  product            Product         @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  serialNumber       String          @unique // Số serial định danh (S01-A7M4-8821943...)
+  
+  shutterCount       Int?            // Số lần bấm máy (null đối với lens)
+  conditionGrade     String          // A+ (99%), A (98%), B+ (95%)
+  sensorInspection   String?         // Tình trạng cảm biến ("0 dead pixel, không bụi bẩn...")
+  opticsCondition    String          // Tình trạng thấu kính / ngàm
+  scratchNotes       String          // Ghi chú vết trầy xước có sẵn
+  depositAmount      Int             // Mức tiền đặt cọc (VND)
+  status             ItemStatus      @default(AVAILABLE) // AVAILABLE, RENTED, MAINTENANCE, SOLD
+  
+  rentalBookings     RentalBooking[]
+  orderItem          Order?
+  
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@index([modelId])
+}
+
+model RentalBooking {
+  id                   String        @id @default(uuid())
+  bookingCode          String        @unique // e.g. BK-202609-8472
+  userId               String
+  user                 User          @relation(fields: [userId], references: [id])
+  cameraItemId         Int
+  cameraItem           CameraItem    @relation(fields: [cameraItemId], references: [id])
+  
+  startDate            DateTime
+  endDate              DateTime
+  totalDays            Int
+  dailyRate            Int
+  totalRentalFee       Int
+  depositAmount        Int
+  
+  depositStatus        DepositStatus @default(PENDING)
+  contractSigned       Boolean       @default(false)
+  contractSignatureUrl String?
+  
+  status               BookingStatus @default(PENDING_PAYMENT)
+  deliveryMethod       String        @default("STORE_PICKUP")
+  customerNotes        String?
+  returnInspectionNote String?
+  
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([cameraItemId])
+}
+
+model Order {
+  id                String       @id @default(uuid())
+  orderCode         String       @unique
+  userId            String
+  user              User         @relation(fields: [userId], references: [id])
+  cameraItemId      Int          @unique
+  cameraItem        CameraItem   @relation(fields: [cameraItemId], references: [id])
+  
+  totalAmount       Int
+  status            OrderStatus  @default(PENDING_PAYMENT)
+  paymentMethod     String       @default("BANK_TRANSFER")
+  
+  warrantyMonths    Int          @default(6)
+  warrantyExpiresAt DateTime
+  
+  shippingAddress   String?
+  notes             String?
+  
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([userId])
+}

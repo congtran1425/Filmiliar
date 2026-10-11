@@ -1,0 +1,14 @@
+node_modules
+**/dist
+.git
+.agents
+.env*
+!.env.example
+*.pem
+*.key
+*.docx
+extracted_content.txt
+docs/private
+docs/inet_hosting_setup_guide.md
+uploads
+.vercel

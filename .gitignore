@@ -1,0 +1,58 @@
+# Node dependencies
+node_modules/
+.npm/
+
+# Build artifacts
+dist/
+build/
+.next/
+out/
+
+# Environment variables and deployment state
+.env*
+!.env.example
+!.env.*.example
+.vercel/
+.netlify/
+
+# Private credentials and key material
+.ssh/
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+credentials.json
+secrets/
+private/
+
+# Course and infrastructure documents kept on this machine
+/TIỂU LUẬN CLKDTMĐT - NHÓM 1.docx
+/extracted_content.txt
+/docs/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# Prisma
+dev.db
+dev.db-journal
+
+# Sensitive / Temporary Sandbox Scripts
+server.js
+*.tmp
+*.temp
+
