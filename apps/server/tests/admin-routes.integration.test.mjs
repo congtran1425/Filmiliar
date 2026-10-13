@@ -20,6 +20,10 @@ test('admin routes enforce roles, keep identity fields private, and guard invent
   const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
   const suffix = crypto.randomBytes(5).toString('hex');
   const server = app.listen(0, '127.0.0.1');
+  if (!server.listening) await new Promise((resolve, reject) => {
+    server.once('listening', resolve);
+    server.once('error', reject);
+  });
   const address = server.address();
   assert.ok(address && typeof address === 'object');
   const base = `http://127.0.0.1:${address.port}`;
