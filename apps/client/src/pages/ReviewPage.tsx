@@ -12,7 +12,9 @@ function rentalDays(startDate: string, endDate: string): number | null {
   const end = Date.parse(`${endDate}T00:00:00Z`);
   const todayString = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
   const todayUtc = Date.parse(`${todayString}T00:00:00Z`);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start < todayUtc || end <= start) return null;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < todayUtc ||
+      start > todayUtc + 90 * 86400000 || end <= start ||
+      end > start + 30 * 86400000) return null;
   return Math.round((end - start) / 86400000);
 }
 
