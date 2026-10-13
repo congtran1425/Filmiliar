@@ -3,7 +3,8 @@
 > **Dự án**: Filmiliar — E-Commerce Camera Rental & Certified Used Platform  
 > **Repository GitHub**: `https://github.com/congtran1425/Filmiliar.git`  
 > **Nhánh làm việc chính**: `main` (Production Vercel) & `feature/admin-management` (Admin Hub & Backend APIs)  
-> **Tài liệu lịch sử toàn bộ chat**: Xem chi tiết tại [context/CHAT_CONVERSATION_HISTORY.md](context/CHAT_CONVERSATION_HISTORY.md)
+> **Tài liệu lịch sử toàn bộ chat với Antigravity**: Xem chi tiết tại [context/CHAT_CONVERSATION_HISTORY.md](context/CHAT_CONVERSATION_HISTORY.md)  
+> **Tài liệu lịch sử toàn bộ chat với Codex**: Xem chi tiết tại [context/CODEX_CONVERSATION_HISTORY.md](context/CODEX_CONVERSATION_HISTORY.md)  
 
 ---
 
