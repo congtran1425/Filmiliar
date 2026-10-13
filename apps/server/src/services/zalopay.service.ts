@@ -1,151 +1,140 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 
-export interface ZaloPayOrderParams {
+export interface ZaloPayCreateParams {
+  appTransId: string;
+  appUser: string;
   amount: number;
   description: string;
-  appUser?: string;
+  bookingId: string;
   redirectUrl?: string;
-  items?: any[];
-  extraData?: Record<string, any>;
 }
 
 export interface ZaloPayCreateResponse {
   return_code: number;
-  return_message: string;
-  sub_return_code?: number;
-  sub_return_message?: string;
+  return_message?: string;
+  qr_code?: string;
   order_url?: string;
-  zp_trans_token?: string;
-  order_token?: string;
   app_trans_id: string;
 }
 
 export interface ZaloPayQueryResponse {
-  return_code: number; // 1: Success, 2: Fail, 3: Processing/Pending
-  return_message: string;
+  return_code: number;
+  return_message?: string;
   sub_return_code?: number;
-  sub_return_message?: string;
-  is_processing?: boolean;
   amount?: number;
-  zp_trans_id?: number | string;
-  server_time?: number;
-  discount_amount?: number;
+  zp_trans_id?: string;
 }
 
-export class ZaloPayService {
-  private appId: string;
-  private key1: string;
-  private key2: string;
-  private endpoint: string;
-  private queryEndpoint: string;
-  private callbackUrl: string;
+export interface ZaloPayCallbackData {
+  app_id: number;
+  app_trans_id: string;
+  amount: number;
+  zp_trans_id?: string;
+  embed_data?: string;
+}
 
-  constructor() {
-    this.appId = process.env.ZALOPAY_APP_ID || '';
-    this.key1 = process.env.ZALOPAY_KEY1 || '';
-    this.key2 = process.env.ZALOPAY_KEY2 || '';
-    this.endpoint = process.env.ZALOPAY_ENDPOINT || 'https://sb-openapi.zalopay.vn/v2/create';
-    this.queryEndpoint = process.env.ZALOPAY_QUERY_ENDPOINT || 'https://sb-openapi.zalopay.vn/v2/query';
-    this.callbackUrl = process.env.ZALOPAY_CALLBACK_URL || '';
+export interface ZaloPayGateway {
+  createPayment(params: ZaloPayCreateParams): Promise<ZaloPayCreateResponse>;
+  checkOrderStatus(appTransId: string): Promise<ZaloPayQueryResponse>;
+  verifyCallback(data: string, mac: string): boolean;
+  parseCallback(data: string): ZaloPayCallbackData;
+  appId: number;
+}
+
+type GatewayOptions = {
+  appId?: string;
+  key1?: string;
+  key2?: string;
+  callbackUrl?: string;
+  fetcher?: typeof fetch;
+};
+
+function exactTransactionId(raw: string): string | undefined {
+  const match = raw.match(/"zp_trans_id"\s*:\s*(?:"(\d+)"|(\d+))/);
+  return match?.[1] || match?.[2];
+}
+
+export class ZaloPayService implements ZaloPayGateway {
+  readonly appId: number;
+  private readonly key1: string;
+  private readonly key2: string;
+  private readonly callbackUrl: string;
+  private readonly fetcher: typeof fetch;
+
+  constructor(options: GatewayOptions = {}) {
+    this.appId = Number(options.appId ?? process.env.ZALOPAY_APP_ID ?? '');
+    this.key1 = options.key1 ?? process.env.ZALOPAY_KEY1 ?? '';
+    this.key2 = options.key2 ?? process.env.ZALOPAY_KEY2 ?? '';
+    this.callbackUrl = options.callbackUrl ?? process.env.ZALOPAY_CALLBACK_URL ?? '';
+    this.fetcher = options.fetcher ?? fetch;
   }
 
-  /**
-   * Tạo đơn thanh toán ZaloPay Sandbox v2
-   */
-  async createPayment(params: ZaloPayOrderParams): Promise<ZaloPayCreateResponse> {
-    const now = new Date();
-    const yy = String(now.getFullYear()).slice(-2);
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const transSuffix = Math.floor(100000 + Math.random() * 900000);
-    const appTransId = `${yy}${mm}${dd}_${transSuffix}`;
+  isConfigured(): boolean {
+    return Number.isSafeInteger(this.appId) && this.appId > 0 && this.key1.length >= 16 &&
+      this.key2.length >= 16 && /^https:\/\//.test(this.callbackUrl);
+  }
 
+  private assertConfigured() {
+    if (!this.isConfigured()) throw new Error('ZaloPay Sandbox configuration is incomplete');
+  }
+
+  async createPayment(params: ZaloPayCreateParams): Promise<ZaloPayCreateResponse> {
+    this.assertConfigured();
     const appTime = Date.now();
-    const appUser = params.appUser || 'filmiliar_guest';
-    const embedData = JSON.stringify({
-      redirecturl: params.redirectUrl || 'http://localhost:5173',
-      ...params.extraData
+    const embedData = JSON.stringify({ bookingId: params.bookingId, preferred_payment_method: ['vietqr'], ...(params.redirectUrl ? { redirecturl: params.redirectUrl } : {}) });
+    const items = '[]';
+    const rawMac = `${this.appId}|${params.appTransId}|${params.appUser}|${params.amount}|${appTime}|${embedData}|${items}`;
+    const mac = crypto.createHmac('sha256', this.key1).update(rawMac).digest('hex');
+    const body = new URLSearchParams({
+      app_id: String(this.appId), app_user: params.appUser, app_time: String(appTime),
+      amount: String(params.amount), app_trans_id: params.appTransId,
+      embed_data: embedData, item: items, description: params.description,
+      bank_code: '', callback_url: this.callbackUrl, expire_duration_seconds: '900', mac
     });
-    const items = JSON.stringify(params.items || []);
-
-    // Format: appid|app_trans_id|appuser|amount|apptime|embeddata|item
-    const rawData = `${this.appId}|${appTransId}|${appUser}|${params.amount}|${appTime}|${embedData}|${items}`;
-    const mac = crypto.createHmac('sha256', this.key1).update(rawData).digest('hex');
-
-    const payload = {
-      app_id: this.appId,
-      app_user: appUser,
-      app_time: appTime,
-      amount: params.amount,
-      app_trans_id: appTransId,
-      embed_data: embedData,
-      item: items,
-      description: params.description,
-      bank_code: '',
-      callback_url: this.callbackUrl,
-      mac
-    };
-
-    const formData = new URLSearchParams();
-    for (const [key, value] of Object.entries(payload)) {
-      formData.append(key, String(value));
-    }
-
-    try {
-      const response = await fetch(this.endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: formData.toString()
-      });
-
-      const data = (await response.json()) as Record<string, any>;
-      return {
-        ...data,
-        app_trans_id: appTransId
-      } as ZaloPayCreateResponse;
-    } catch (error: any) {
-      throw new Error(`Lỗi kết nối ZaloPay Gateway: ${error.message}`);
-    }
+    const response = await this.fetcher('https://sb-openapi.zalopay.vn/v2/create', {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body, signal: AbortSignal.timeout(10000)
+    });
+    if (!response.ok) throw new Error('ZaloPay create request failed');
+    const result = JSON.parse(await response.text()) as ZaloPayCreateResponse;
+    if (typeof result.return_code !== 'number') throw new Error('Invalid ZaloPay create response');
+    return { ...result, app_trans_id: params.appTransId };
   }
 
-  /**
-   * Kiểm tra chữ ký Callback từ ZaloPay Server
-   */
-  verifyCallback(dataStr: string, reqMac: string): boolean {
-    const mac = crypto.createHmac('sha256', this.key2).update(dataStr).digest('hex');
-    return reqMac === mac;
-  }
-
-  /**
-   * Chủ động truy vấn trạng thái đơn hàng (Polling query)
-   */
   async checkOrderStatus(appTransId: string): Promise<ZaloPayQueryResponse> {
-    // Format: appid|app_trans_id|key1
-    const rawData = `${this.appId}|${appTransId}|${this.key1}`;
-    const mac = crypto.createHmac('sha256', this.key1).update(rawData).digest('hex');
+    this.assertConfigured();
+    const rawMac = `${this.appId}|${appTransId}|${this.key1}`;
+    const mac = crypto.createHmac('sha256', this.key1).update(rawMac).digest('hex');
+    const body = new URLSearchParams({ app_id: String(this.appId), app_trans_id: appTransId, mac });
+    const response = await this.fetcher('https://sb-openapi.zalopay.vn/v2/query', {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body, signal: AbortSignal.timeout(10000)
+    });
+    if (!response.ok) throw new Error('ZaloPay query request failed');
+    const raw = await response.text();
+    const result = JSON.parse(raw) as ZaloPayQueryResponse;
+    if (typeof result.return_code !== 'number') throw new Error('Invalid ZaloPay query response');
+    return { ...result, zp_trans_id: exactTransactionId(raw) };
+  }
 
-    const formData = new URLSearchParams();
-    formData.append('app_id', this.appId);
-    formData.append('app_trans_id', appTransId);
-    formData.append('mac', mac);
+  verifyCallback(data: string, mac: string): boolean {
+    if (!this.isConfigured() || !/^[a-f0-9]{64}$/i.test(mac)) return false;
+    const actual = crypto.createHmac('sha256', this.key2).update(data).digest();
+    return crypto.timingSafeEqual(actual, Buffer.from(mac, 'hex'));
+  }
 
-    try {
-      const response = await fetch(this.queryEndpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: formData.toString()
-      });
-
-      return (await response.json()) as ZaloPayQueryResponse;
-    } catch (error: any) {
-      throw new Error(`Lỗi truy vấn trạng thái ZaloPay: ${error.message}`);
+  parseCallback(data: string): ZaloPayCallbackData {
+    const value = JSON.parse(data) as Record<string, unknown>;
+    if (typeof value.app_id !== 'number' || typeof value.app_trans_id !== 'string' ||
+        typeof value.amount !== 'number' || !Number.isSafeInteger(value.amount)) {
+      throw new Error('Invalid ZaloPay callback data');
     }
-
+    return {
+      app_id: value.app_id,
+      app_trans_id: value.app_trans_id,
+      amount: value.amount,
+      zp_trans_id: exactTransactionId(data),
+      embed_data: typeof value.embed_data === 'string' ? value.embed_data : undefined
+    };
   }
 }
-
-export const zaloPayService = new ZaloPayService();

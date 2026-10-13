@@ -22,6 +22,7 @@ enum KycStatus {
 
 enum ItemStatus {
   AVAILABLE
+  RESERVED
   RENTED
   MAINTENANCE
   SOLD
@@ -41,6 +42,14 @@ enum DepositStatus {
   HELD
   REFUNDED
   DEDUCTED
+}
+
+enum PaymentAttemptStatus {
+  CREATING
+  WAITING
+  PAID
+  FAILED
+  REVIEW
 }
 
 enum OrderStatus {
@@ -68,6 +77,7 @@ model User {
   eSignatureUrl   String?
   
   rentals         RentalBooking[]
+  paymentAttempts PaymentAttempt[]
   orders          Order[]
   
   createdAt       DateTime        @default(now())
@@ -158,12 +168,37 @@ model RentalBooking {
   deliveryMethod       String        @default("STORE_PICKUP")
   customerNotes        String?
   returnInspectionNote String?
+  paymentAttempt       PaymentAttempt?
   
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 
   @@index([userId])
   @@index([cameraItemId])
+}
+
+model PaymentAttempt {
+  id              String               @id @default(uuid())
+  bookingId       String               @unique
+  booking         RentalBooking        @relation(fields: [bookingId], references: [id])
+  userId          String
+  user            User                 @relation(fields: [userId], references: [id])
+  clientRequestId String
+  appTransId      String               @unique
+  amount          Int
+  status          PaymentAttemptStatus @default(CREATING)
+  qrCode          String?
+  orderUrl        String?
+  providerTxnId   String?              @unique
+  reviewReason    String?
+  expiresAt       DateTime
+  lastQueriedAt   DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@unique([userId, clientRequestId])
+  @@index([status, expiresAt])
+  @@index([userId, createdAt])
 }
 
 model Order {

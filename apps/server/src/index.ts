@@ -9,6 +9,8 @@ import { PrismaClient, ItemStatus, DepositStatus, Role, KycStatus } from '@prism
 import { z } from 'zod';
 import { uploadService } from './services/upload.service.js';
 import { createSessionToken, getSessionUser, hashPassword, verifyPassword } from './auth.js';
+import { registerPaymentRoutes } from './routes/payment.js';
+import { parseRentalDates, PaymentFlowError } from './services/payment-flow.js';
 
 dotenv.config();
 
@@ -34,7 +36,7 @@ app.use(helmet());
 const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',').map((origin) => origin.trim());
 app.use((req: Request, res: Response, next: NextFunction) => {
   const origin = req.get('Origin');
-  if (origin && !allowedOrigins.includes(origin)) {
+  if (origin && !allowedOrigins.includes(origin) && req.path !== '/api/payment/callback') {
     res.status(403).json({ error: 'Origin not allowed' });
     return;
   }
@@ -304,7 +306,14 @@ app.post('/api/quiz/recommend', async (req: Request, res: Response) => {
 app.post('/api/rentals/calculate', async (req: Request, res: Response) => {
   try {
     const { cameraId, startDate, endDate } = req.body;
+    if (typeof startDate !== 'string' || typeof endDate !== 'string') {
+      return res.status(400).json({ success: false, message: 'Ngày thuê không hợp lệ' });
+    }
+    const { days: diffDays } = parseRentalDates(startDate, endDate);
     const numId = parseInt(String(cameraId).replace('prod-', ''));
+    if (!Number.isSafeInteger(numId) || numId <= 0 || !/^(?:prod-)?\d+$/.test(String(cameraId))) {
+      return res.status(400).json({ success: false, message: 'Mã thiết bị không hợp lệ' });
+    }
 
     const product = await prisma.product.findUnique({
       where: { id: numId },
@@ -314,11 +323,6 @@ app.post('/api/rentals/calculate', async (req: Request, res: Response) => {
     if (!product) {
       return res.status(404).json({ success: false, message: 'Thiết bị không tồn tại' });
     }
-
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    const diffDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
 
     const totalRentalFee = diffDays * product.dailyRentalRate;
     res.json({
@@ -335,6 +339,7 @@ app.post('/api/rentals/calculate', async (req: Request, res: Response) => {
       }
     });
   } catch (error: any) {
+    if (error instanceof PaymentFlowError) return res.status(error.statusCode).json({ success: false, message: error.message });
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -374,12 +379,8 @@ app.post('/api/upload', requireUser, requireAdmin, (req: Request, res: Response,
 // 7. ZALOPAY PAYMENT ENDPOINTS
 // ==========================================
 
-// Payment and order creation remain disabled until policy and reconciliation are approved.
-for (const endpoint of ['/api/payment/create', '/api/payment/check-status', '/api/payment/callback']) {
-  app.post(endpoint, (_req: Request, res: Response) => {
-    res.status(503).json({ success: false, message: 'Filmiliar chưa nhận đơn hoặc thanh toán trực tuyến.' });
-  });
-}
+// The Sandbox API is admin-only and remains off unless the host opts in explicitly.
+registerPaymentRoutes(app, prisma, requireUser, requireAdmin);
 
 // ==========================================
 // 8. USER & AUTH ENDPOINTS
@@ -542,7 +543,8 @@ app.get('/api/user/rentals', requireUser, async (_req: Request, res: Response) =
       include: {
         cameraItem: {
           include: { product: true }
-        }
+        },
+        paymentAttempt: { select: { status: true, appTransId: true, reviewReason: true } }
       },
       orderBy: { createdAt: 'desc' },
       take: 20
@@ -580,7 +582,8 @@ app.get('/api/admin/bookings', requireUser, requireAdmin, async (_req: Request, 
         user: { select: { id: true, email: true, fullName: true, phone: true, kycStatus: true } },
         cameraItem: {
           include: { product: true }
-        }
+        },
+        paymentAttempt: { select: { status: true, appTransId: true, reviewReason: true } }
       },
       orderBy: { createdAt: 'desc' },
       take: 100
@@ -606,7 +609,11 @@ app.get('/api/admin/stats', requireUser, requireAdmin, async (_req: Request, res
     const totalBookings = await prisma.rentalBooking.count();
     const totalHeldDeposit = await prisma.rentalBooking.aggregate({
       _sum: { depositAmount: true },
-      where: { depositStatus: DepositStatus.HELD }
+      where: { depositStatus: DepositStatus.HELD, paymentAttempt: { is: null } }
+    });
+    const sandboxHeldDeposit = await prisma.rentalBooking.aggregate({
+      _sum: { depositAmount: true },
+      where: { depositStatus: DepositStatus.HELD, paymentAttempt: { is: { status: 'PAID' } } }
     });
 
     res.json({
@@ -618,6 +625,7 @@ app.get('/api/admin/stats', requireUser, requireAdmin, async (_req: Request, res
         rentedUnits,
         totalBookings,
         heldDepositAmount: totalHeldDeposit._sum.depositAmount || 0,
+        sandboxHeldDepositAmount: sandboxHeldDeposit._sum.depositAmount || 0,
         utilizationRate: totalUnits > 0 ? Math.round((rentedUnits / totalUnits) * 100) : 0
       }
     });

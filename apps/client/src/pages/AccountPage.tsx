@@ -10,6 +10,7 @@ type Rental = {
   id: string; bookingCode: string; status: string; depositStatus: string;
   startDate: string; endDate: string; totalRentalFee: number;
   cameraItem: { serialNumber: string; product: { modelName: string; slug: string } };
+  paymentAttempt: { status: string; appTransId: string } | null;
 };
 type Order = {
   id: string; orderCode: string; status: string; createdAt: string;
@@ -139,6 +140,7 @@ export function AccountPage() {
             <h3 className="font-semibold text-white">{rental.cameraItem.product.modelName}</h3>
             <p className="mt-1 text-sm text-slate-300">Mã {rental.bookingCode} · chiếc {rental.cameraItem.serialNumber}</p>
             <p className="mt-2 text-sm text-slate-400">Trạng thái đơn: {rental.status} · Trạng thái cọc trong dữ liệu: {rental.depositStatus}</p>
+            {rental.paymentAttempt && <p className="mt-1 text-sm text-amber-300">Lượt thử ZaloPay Sandbox · {rental.paymentAttempt.status}. Không phải biên lai thanh toán thật.</p>}
             <p className="mt-1 text-sm text-slate-400">Tiền thuê ghi nhận: {money(rental.totalRentalFee)}</p>
             <Link to={`/thiet-bi/${rental.cameraItem.product.slug}`} className="mt-3 inline-block text-sm font-semibold text-film-warm underline">Xem thiết bị</Link>
           </article>)}

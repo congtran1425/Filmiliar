@@ -6,6 +6,7 @@ import { useProduct } from '../lib/useProduct';
 
 const unitStatus: Record<CameraUnit['status'], string> = {
   AVAILABLE: 'Có trong kho (chưa xác nhận lịch)',
+  RESERVED: 'Đang giữ chỗ',
   RENTED: 'Đang cho thuê',
   MAINTENANCE: 'Đang bảo dưỡng',
   SOLD: 'Đã bán',

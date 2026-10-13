@@ -17,7 +17,8 @@ export interface ProductSummary {
 export interface CameraUnit {
   id: number;
   serialNumber: string;
-  status: 'AVAILABLE' | 'RENTED' | 'MAINTENANCE' | 'SOLD';
+  status: 'AVAILABLE' | 'RESERVED' | 'RENTED' | 'MAINTENANCE' | 'SOLD';
+  depositAmount: number | null;
   conditionGrade: string;
   shutterCount: number | null;
   sensorInspection: string | null;
@@ -61,7 +62,7 @@ const DEMO_PRODUCTS: ProductDetail[] = [
     thumbnailUrl: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=1000&q=80',
     rentPrice: 450000, salePrice: 41500000, unitsCount: 1, weightGram: 658,
     recommendedPurpose: 'Chụp chân dung và quay video',
-    units: [{ id: -1, serialNumber: 'DEMO-A7IV-01', status: 'AVAILABLE', conditionGrade: 'Chưa xác minh', shutterCount: null, sensorInspection: null, opticsCondition: 'Chưa có dữ liệu', scratchNotes: 'Chưa có dữ liệu' }],
+    units: [{ id: -1, serialNumber: 'DEMO-A7IV-01', status: 'AVAILABLE', depositAmount: null, conditionGrade: 'Chưa xác minh', shutterCount: null, sensorInspection: null, opticsCondition: 'Chưa có dữ liệu', scratchNotes: 'Chưa có dữ liệu' }],
   },
   {
     id: 'demo-fujifilm-xt30ii', slug: 'fujifilm-x-t30-ii', name: 'Fujifilm X-T30 II', brand: 'Fujifilm',
@@ -69,7 +70,7 @@ const DEMO_PRODUCTS: ProductDetail[] = [
     thumbnailUrl: 'https://images.unsplash.com/photo-1502920917128-1aa500764cbd?auto=format&fit=crop&w=1000&q=80',
     rentPrice: 250000, salePrice: 20000000, unitsCount: 1, weightGram: 378,
     recommendedPurpose: 'Du lịch và chụp đời thường',
-    units: [{ id: -2, serialNumber: 'DEMO-XT30-01', status: 'AVAILABLE', conditionGrade: 'Chưa xác minh', shutterCount: null, sensorInspection: null, opticsCondition: 'Chưa có dữ liệu', scratchNotes: 'Chưa có dữ liệu' }],
+    units: [{ id: -2, serialNumber: 'DEMO-XT30-01', status: 'AVAILABLE', depositAmount: null, conditionGrade: 'Chưa xác minh', shutterCount: null, sensorInspection: null, opticsCondition: 'Chưa có dữ liệu', scratchNotes: 'Chưa có dữ liệu' }],
   },
 ];
 

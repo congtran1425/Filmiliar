@@ -19,6 +19,7 @@ COPY --from=build /app/node_modules /app/node_modules
 COPY --from=build /app/apps/server/dist /app/apps/server/dist
 COPY --from=build /app/apps/server/prisma /app/apps/server/prisma
 COPY --from=build /app/apps/server/package.json /app/apps/server/package.json
+COPY apps/server/tests /app/apps/server/tests
 USER node
 EXPOSE 5000
 CMD ["node", "apps/server/dist/index.js"]

@@ -5,17 +5,18 @@ import { useSearchParams } from 'react-router-dom';
 import { apiRequest } from '../lib/session';
 
 type Tab = 'tong-quan' | 'don-thue' | 'kho-may' | 'nguoi-dung';
-type Stats = { totalModels: number; totalUnits: number; availableUnits: number; rentedUnits: number; totalBookings: number; heldDepositAmount: number; utilizationRate: number };
+type Stats = { totalModels: number; totalUnits: number; availableUnits: number; rentedUnits: number; totalBookings: number; heldDepositAmount: number; sandboxHeldDepositAmount: number; utilizationRate: number };
 type InventoryItem = {
   id: number; serialNumber: string; shutterCount: number | null; conditionGrade: string;
   sensorInspection: string | null; opticsCondition: string; scratchNotes: string;
-  status: 'AVAILABLE' | 'RENTED' | 'MAINTENANCE' | 'SOLD';
+  status: 'AVAILABLE' | 'RESERVED' | 'RENTED' | 'MAINTENANCE' | 'SOLD';
   product: { modelName: string; brand: string; slug: string };
 };
 type Booking = {
   id: string; bookingCode: string; status: string; depositStatus: string;
   user: { fullName: string; email: string; kycStatus: string };
   cameraItem: { serialNumber: string; product: { modelName: string } };
+  paymentAttempt: { status: string; appTransId: string; reviewReason: string | null } | null;
 };
 type ListedUser = { id: string; email: string; fullName: string; phone: string | null; role: string; kycStatus: string; createdAt: string };
 const tabs: { id: Tab; label: string }[] = [
@@ -118,7 +119,7 @@ export function AdminPage() {
             ['Tỷ lệ ghi nhận đang thuê', stats.utilizationRate + '%']
           ].map(([label, value]) => <div key={label} className="rounded-xl border border-film-border bg-film-card p-5"><p className="text-sm text-slate-400">{label}</p><p className="mt-2 text-2xl font-bold text-white">{value}</p></div>)}
         </div>
-        <p className="mt-5 text-sm text-slate-400">Trạng thái cọc HELD đang lưu: {money(stats.heldDepositAmount)}. Con số này không chứng minh đã thu tiền thực tế.</p>
+        <p className="mt-5 text-sm text-slate-400">Cọc HELD từ bản ghi cũ: {money(stats.heldDepositAmount)}; từ lượt thử Sandbox: {money(stats.sandboxHeldDepositAmount)}. Cả hai con số không chứng minh đã thu tiền thật.</p>
       </section> : !error && <p role="status" className="mt-7 text-slate-400">Đang tải thống kê...</p>)}
 
       {tab === 'don-thue' && <section className="mt-7">
@@ -129,6 +130,8 @@ export function AdminPage() {
             <h3 className="font-semibold text-white">{booking.bookingCode} · {booking.cameraItem.product.modelName}</h3>
             <p className="mt-1 text-sm text-slate-300">{booking.user.fullName} · {booking.user.email} · chiếc {booking.cameraItem.serialNumber}</p>
             <p className="mt-2 text-sm text-slate-400">Đơn: {booking.status} · cọc trong dữ liệu: {booking.depositStatus}</p>
+            {booking.paymentAttempt && <p className="mt-1 text-sm text-amber-300">ZaloPay Sandbox · {booking.paymentAttempt.status} · GD {booking.paymentAttempt.appTransId}</p>}
+            {booking.paymentAttempt?.reviewReason && <p className="mt-1 text-sm text-red-300">Cần đối soát: {booking.paymentAttempt.reviewReason}</p>}
           </article>)}</div>}
       </section>}
 

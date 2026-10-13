@@ -1,15 +1,17 @@
-import { useState, useId } from 'react';
+import { useState, useId, useEffect, useCallback } from 'react';
 import { ArrowLeft, Info, Calendar, ShieldAlert, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { formatVnd } from '../lib/catalog';
 import { useProduct } from '../lib/useProduct';
+import { apiRequest, useSession } from '../lib/session';
+import { PaymentQrModal } from '../components/PaymentQrModal';
 
 function rentalDays(startDate: string, endDate: string): number | null {
   if (!startDate || !endDate) return null;
   const start = Date.parse(`${startDate}T00:00:00Z`);
   const end = Date.parse(`${endDate}T00:00:00Z`);
-  const today = new Date();
-  const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  const todayString = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+  const todayUtc = Date.parse(`${todayString}T00:00:00Z`);
   if (!Number.isFinite(start) || !Number.isFinite(end) || start < todayUtc || end <= start) return null;
   return Math.round((end - start) / 86400000);
 }
@@ -21,6 +23,19 @@ export function ReviewPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [delivery, setDelivery] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
+  const [sandboxReady, setSandboxReady] = useState(false);
+  const [showPayment, setShowPayment] = useState(false);
+  const { user, state } = useSession();
+  const closePayment = useCallback(() => setShowPayment(false), []);
+
+  useEffect(() => {
+    if (state !== 'ready' || user?.role !== 'ADMIN') { setSandboxReady(false); return; }
+    const controller = new AbortController();
+    apiRequest<{ sandboxEnabled: boolean }>('/api/payment/capabilities', { signal: controller.signal })
+      .then((result) => { if (!controller.signal.aborted) setSandboxReady(result.sandboxEnabled); })
+      .catch(() => { if (!controller.signal.aborted) setSandboxReady(false); });
+    return () => controller.abort();
+  }, [state, user?.role]);
 
   const startDateId = useId();
   const endDateId = useId();
@@ -66,7 +81,7 @@ export function ReviewPage() {
     );
   }
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
   const dateError = startDate && endDate && !days;
 
   return (
@@ -89,7 +104,7 @@ export function ReviewPage() {
           Xem lại thông tin {mode === 'thue' ? 'thuê máy' : 'mua máy'}
         </h1>
         <p className="mt-2 text-xs sm:text-sm leading-relaxed text-slate-400">
-          Đây là màn hình tóm tắt thông số và dự tính chi phí để bạn kiểm tra. Website hiện chưa mở đặt đơn, chưa giữ chỗ và không thu tiền trực tuyến.
+          Đây là màn hình tóm tắt thông số và dự tính chi phí để bạn kiểm tra. {sandboxReady && mode === 'thue' ? 'Quản trị viên có thể thử luồng QR ZaloPay Sandbox bằng dữ liệu minh họa.' : 'Website hiện chưa mở đặt đơn, chưa giữ chỗ và không thu tiền trực tuyến.'}
         </p>
       </div>
 
@@ -133,6 +148,8 @@ export function ReviewPage() {
                 <dd className="text-white">
                   {unit.status === 'AVAILABLE' ? (
                     <span className="text-emerald-400 font-medium">Ghi nhận có trong kho</span>
+                  ) : unit.status === 'RESERVED' ? (
+                    <span className="text-amber-300 font-medium">Đang giữ chỗ</span>
                   ) : (
                     <span className="text-red-400 font-medium">Chưa có sẵn</span>
                   )}
@@ -143,7 +160,7 @@ export function ReviewPage() {
             {unit.status !== 'AVAILABLE' && (
               <div role="alert" className="mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400 flex items-start gap-2">
                 <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>Chiếc máy này không khả dụng. Vui lòng quay lại trang chi tiết để chọn chiếc khác.</span>
+                <span>{unit.status === 'RESERVED' && sandboxReady ? 'Chiếc máy đang được giữ. Nếu đó là giao dịch thử của bạn, mở cửa sổ Sandbox để xem lại cùng giao dịch.' : 'Chiếc máy này không khả dụng. Vui lòng quay lại trang chi tiết để chọn chiếc khác.'}</span>
               </div>
             )}
           </section>
@@ -231,6 +248,7 @@ export function ReviewPage() {
                   </label>
                 </div>
               </fieldset>
+              {sandboxReady && delivery === 'DELIVERY' && <p className="mt-3 text-xs text-amber-300">Luồng Sandbox chỉ thử nhận trực tiếp; phí giao tận nơi chưa được chốt.</p>}
             </section>
           ) : (
             <section className="rounded-2xl border border-film-border bg-film-card p-4 sm:p-5">
@@ -253,7 +271,7 @@ export function ReviewPage() {
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-film-warm" />
             <p>
               {mode === 'thue' 
-                ? 'Quy tắc đặt cọc, hoàn cọc và xác nhận lịch trống máy hiện đang được nhóm hoàn thiện. Lịch thuê chỉ có hiệu lực khi có xác nhận trực tiếp từ đội ngũ Filmiliar.'
+                ? 'Quy tắc đặt cọc, hoàn cọc và xác nhận lịch trống máy hiện đang được nhóm hoàn thiện. Thử nghiệm Sandbox không tạo cam kết thuê thật hoặc hoàn tiền thật.'
                 : 'Quy trình kiểm tra máy trực tiếp, dùng thử và biên bản bàn giao đang được hoàn thiện trước khi mở bán chính thức.'
               }
             </p>
@@ -292,7 +310,7 @@ export function ReviewPage() {
                 </div>
                 <div className="flex justify-between gap-3">
                   <dt className="text-slate-400">Tiền cọc thiết bị:</dt>
-                  <dd className="text-slate-400 italic">Chưa xác định</dd>
+                  <dd className={sandboxReady && unit.depositAmount ? 'text-film-warm font-semibold' : 'text-slate-400 italic'}>{sandboxReady && unit.depositAmount ? `${formatVnd(unit.depositAmount)} (dữ liệu mẫu)` : 'Chưa xác định'}</dd>
                 </div>
               </>
             ) : (
@@ -316,19 +334,21 @@ export function ReviewPage() {
               <span>Trạng thái xem trước</span>
             </div>
             <p className="text-slate-400 leading-relaxed">
-              Website không gửi thông tin lên máy chủ, chưa ghi nhận đơn và không yêu cầu thanh toán.
+              {sandboxReady && mode === 'thue' ? 'Chỉ quản trị viên có thể tạo đơn thử Sandbox. Đơn và trạng thái giữ chỗ được ghi trong dữ liệu để kiểm thử; chưa nhận giao dịch tiền thật.' : 'Website không gửi thông tin lên máy chủ, chưa ghi nhận đơn và không yêu cầu thanh toán.'}
             </p>
           </div>
 
           {/* Action buttons */}
           <div className="space-y-2 pt-1">
-            <button 
-              type="button" 
-              disabled 
+            {sandboxReady && mode === 'thue' ? <button
+              type="button"
+              disabled={!days || delivery !== 'PICKUP' || (unit.status !== 'AVAILABLE' && unit.status !== 'RESERVED')}
+              onClick={() => setShowPayment(true)}
+              className="w-full min-h-[44px] rounded-xl bg-film-warm px-4 py-2.5 text-xs font-bold text-film-dark hover:bg-amber-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-film-warm active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-400"
+            >Thử tạo mã QR ZaloPay Sandbox</button> : <button
+              type="button" disabled
               className="w-full min-h-[44px] cursor-not-allowed rounded-xl bg-slate-800 border border-slate-700 px-4 py-2.5 text-xs font-bold text-slate-400 text-center"
-            >
-              Chưa mở đặt đơn hoặc thanh toán
-            </button>
+            >Chưa mở đặt đơn hoặc thanh toán</button>}
 
             <Link
               to={detailPath}
@@ -339,6 +359,7 @@ export function ReviewPage() {
           </div>
         </aside>
       </div>
+      {showPayment && unit && days && <PaymentQrModal cameraItemId={unit.id} startDate={startDate} endDate={endDate} onClose={closePayment} />}
     </main>
   );
 }
