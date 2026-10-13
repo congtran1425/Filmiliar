@@ -5,7 +5,7 @@ import path from 'path';
 import multer from 'multer';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
-import { PrismaClient, ItemStatus, DepositStatus, Role, KycStatus } from '@prisma/client';
+import { PrismaClient, ItemStatus, DepositStatus, Role, KycStatus, BookingStatus, OrderStatus } from '@prisma/client';
 import { z } from 'zod';
 import { uploadService } from './services/upload.service.js';
 import { createSessionToken, getSessionUser, hashPassword, verifyPassword } from './auth.js';
@@ -77,6 +77,12 @@ async function requireUser(req: Request, res: Response, next: NextFunction) {
 function requireAdmin(_req: Request, res: Response, next: NextFunction) {
   if (res.locals.user?.role !== Role.ADMIN) return res.status(403).json({ success: false, message: 'Không có quyền truy cập' });
   next();
+}
+
+// These workflows need approved policies, private identity storage and provider reconciliation.
+// Keep draft handlers unavailable until each contract and its integration tests are in place.
+function requireApprovedAdminWorkflow(_req: Request, res: Response) {
+  return res.status(503).json({ success: false, message: 'Quy trình này đang chờ chính sách và bước đối soát được duyệt.' });
 }
 
 
@@ -531,9 +537,45 @@ app.put('/api/user/change-password', requireUser, async (req: Request, res: Resp
   }
 });
 
-// Public image hosting is not suitable for identity documents.
-app.post('/api/user/kyc', requireUser, (_req: Request, res: Response) => {
-  res.status(503).json({ success: false, message: 'Filmiliar chưa tiếp nhận giấy tờ định danh trực tuyến.' });
+// Tiếp nhận hồ sơ định danh eKYC từ người dùng
+app.post('/api/user/kyc', requireUser, requireApprovedAdminWorkflow, async (req: Request, res: Response) => {
+  const parsed = z.object({
+    idCardNumber: z.string().trim().regex(/^\d{9,12}$/, 'Số CCCD/CMND phải gồm 9 đến 12 chữ số'),
+    idCardFrontUrl: z.string().trim().optional().nullable(),
+    idCardBackUrl: z.string().trim().optional().nullable(),
+    eSignatureUrl: z.string().trim().optional().nullable()
+  }).safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, message: parsed.error.issues[0]?.message || 'Dữ liệu eKYC không hợp lệ' });
+  }
+
+  try {
+    const updated = await prisma.user.update({
+      where: { id: res.locals.user.id },
+      data: {
+        idCardNumber: parsed.data.idCardNumber,
+        idCardFrontUrl: parsed.data.idCardFrontUrl || null,
+        idCardBackUrl: parsed.data.idCardBackUrl || null,
+        eSignatureUrl: parsed.data.eSignatureUrl || null,
+        kycStatus: KycStatus.PENDING
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Đã gửi hồ sơ eKYC thành công, quản trị viên sẽ thẩm định trong thời gian sớm nhất',
+      user: {
+        id: updated.id,
+        email: updated.email,
+        fullName: updated.fullName,
+        kycStatus: updated.kycStatus,
+        idCardNumber: updated.idCardNumber
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: 'Lỗi cập nhật hồ sơ eKYC: ' + error.message });
+  }
 });
 
 app.get('/api/user/rentals', requireUser, async (_req: Request, res: Response) => {
@@ -574,47 +616,241 @@ app.get('/api/user/orders', requireUser, async (_req: Request, res: Response) =>
 // 9. ADMIN DASHBOARD ENDPOINTS
 // ==========================================
 
-// Lấy tất cả đơn thuê
-app.get('/api/admin/bookings', requireUser, requireAdmin, async (_req: Request, res: Response) => {
+// Lấy danh sách đơn thuê kèm bộ lọc tìm kiếm
+app.get('/api/admin/bookings', requireUser, requireAdmin, async (req: Request, res: Response) => {
   try {
+    const { status, q } = req.query;
+    const where: any = {};
+
+    if (typeof status === 'string' && Object.values(BookingStatus).includes(status as BookingStatus)) {
+      where.status = status as BookingStatus;
+    }
+
+    if (typeof q === 'string' && q.trim().length > 0) {
+      const term = q.trim();
+      where.OR = [
+        { bookingCode: { contains: term, mode: 'insensitive' } },
+        { user: { fullName: { contains: term, mode: 'insensitive' } } },
+        { user: { email: { contains: term, mode: 'insensitive' } } },
+        { user: { phone: { contains: term, mode: 'insensitive' } } },
+        { cameraItem: { serialNumber: { contains: term, mode: 'insensitive' } } }
+      ];
+    }
+
     const bookings = await prisma.rentalBooking.findMany({
+      where,
       include: {
-        user: { select: { id: true, email: true, fullName: true, phone: true, kycStatus: true } },
+        user: {
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            phone: true,
+            address: true,
+            kycStatus: true
+          }
+        },
         cameraItem: {
           include: { product: true }
         },
-        paymentAttempt: { select: { status: true, appTransId: true, reviewReason: true } }
+        paymentAttempt: {
+          select: { status: true, appTransId: true, reviewReason: true }
+        }
       },
       orderBy: { createdAt: 'desc' },
       take: 100
     });
 
     res.json(serializeData({ success: true, data: bookings }));
-  } catch {
-    res.status(500).json({ success: false, message: 'Không thể tải đơn thuê lúc này' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: 'Không thể tải đơn thuê: ' + error.message });
   }
 });
 
-app.patch('/api/admin/bookings/:id/status', requireUser, requireAdmin, (_req: Request, res: Response) => {
-  res.status(503).json({ success: false, message: 'Chưa có quy trình xác nhận, bàn giao và đối soát cọc.' });
+const updateBookingStatusSchema = z.object({
+  status: z.nativeEnum(BookingStatus).optional(),
+  depositStatus: z.nativeEnum(DepositStatus).optional(),
+  returnInspectionNote: z.string().trim().max(1000).optional(),
+  shutterCountAtReturn: z.number().int().min(0).max(10000000).optional(),
+  sensorInspection: z.string().trim().max(500).optional(),
+  opticsCondition: z.string().trim().max(500).optional(),
+  scratchNotes: z.string().trim().max(500).optional(),
+  conditionGrade: z.string().trim().max(16).optional(),
+  deductionAmount: z.number().int().min(0).optional(),
+  deductionReason: z.string().trim().max(500).optional()
+}).refine((data) => Object.keys(data).length > 0, {
+  message: 'Cần ít nhất một trường thông tin để cập nhật'
 });
 
-// Thống kê tổng quan cho Admin
+// Cập nhật trạng thái đơn thuê, bàn giao máy, nghiệm thu kỹ thuật và đối soát hoàn cọc
+app.patch('/api/admin/bookings/:id/status', requireUser, requireAdmin, requireApprovedAdminWorkflow, async (req: Request, res: Response) => {
+  const parsed = updateBookingStatusSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: parsed.error.issues[0]?.message || 'Dữ liệu cập nhật đơn thuê không hợp lệ'
+    });
+  }
+
+  try {
+    const booking = await prisma.rentalBooking.findUnique({
+      where: { id: req.params.id },
+      include: { cameraItem: true }
+    });
+
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy đơn thuê' });
+    }
+
+    const nextStatus = parsed.data.status ?? booking.status;
+    const nextDepositStatus = parsed.data.depositStatus ?? booking.depositStatus;
+
+    let finalInspectionNote = parsed.data.returnInspectionNote ?? booking.returnInspectionNote ?? '';
+    if (parsed.data.deductionAmount !== undefined && parsed.data.deductionAmount > 0) {
+      const deductionText = `[Khấu trừ cọc: ${parsed.data.deductionAmount.toLocaleString('vi-VN')}đ - Lý do: ${parsed.data.deductionReason || 'Không ghi rõ'}]`;
+      finalInspectionNote = finalInspectionNote ? `${finalInspectionNote} | ${deductionText}` : deductionText;
+    }
+
+    // Đồng bộ trạng thái con máy vật lý (CameraItem)
+    let targetCameraStatus: ItemStatus | undefined;
+    if (nextStatus === BookingStatus.ACTIVE_RENTAL) {
+      targetCameraStatus = ItemStatus.RENTED;
+    } else if (
+      nextStatus === BookingStatus.COMPLETED ||
+      nextStatus === BookingStatus.CANCELLED ||
+      nextDepositStatus === DepositStatus.REFUNDED
+    ) {
+      targetCameraStatus = ItemStatus.AVAILABLE;
+    }
+
+    const cameraUpdateData: any = {};
+    if (targetCameraStatus) {
+      cameraUpdateData.status = targetCameraStatus;
+    }
+    if (parsed.data.shutterCountAtReturn !== undefined) {
+      cameraUpdateData.shutterCount = parsed.data.shutterCountAtReturn;
+    }
+    if (parsed.data.sensorInspection) {
+      cameraUpdateData.sensorInspection = parsed.data.sensorInspection;
+    }
+    if (parsed.data.opticsCondition) {
+      cameraUpdateData.opticsCondition = parsed.data.opticsCondition;
+    }
+    if (parsed.data.scratchNotes) {
+      cameraUpdateData.scratchNotes = parsed.data.scratchNotes;
+    }
+    if (parsed.data.conditionGrade) {
+      cameraUpdateData.conditionGrade = parsed.data.conditionGrade;
+    }
+
+    const [updatedBooking] = await prisma.$transaction([
+      prisma.rentalBooking.update({
+        where: { id: req.params.id },
+        data: {
+          status: nextStatus,
+          depositStatus: nextDepositStatus,
+          returnInspectionNote: finalInspectionNote || null
+        },
+        include: {
+          user: { select: { id: true, email: true, fullName: true, phone: true, kycStatus: true } },
+          cameraItem: { include: { product: true } },
+          paymentAttempt: { select: { status: true, appTransId: true, reviewReason: true } }
+        }
+      }),
+      ...(Object.keys(cameraUpdateData).length > 0
+        ? [
+            prisma.cameraItem.update({
+              where: { id: booking.cameraItemId },
+              data: cameraUpdateData
+            })
+          ]
+        : [])
+    ]);
+
+    res.json(serializeData({
+      success: true,
+      message: 'Cập nhật trạng thái và đối soát cọc thành công',
+      data: updatedBooking
+    }));
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: 'Lỗi khi cập nhật trạng thái đơn thuê: ' + error.message });
+  }
+});
+
+// Thống kê tổng quan và chỉ số KPIs vận hành
 app.get('/api/admin/stats', requireUser, requireAdmin, async (_req: Request, res: Response) => {
   try {
-    const totalModels = await prisma.product.count();
-    const totalUnits = await prisma.cameraItem.count();
-    const availableUnits = await prisma.cameraItem.count({ where: { status: ItemStatus.AVAILABLE } });
-    const rentedUnits = await prisma.cameraItem.count({ where: { status: ItemStatus.RENTED } });
-    const totalBookings = await prisma.rentalBooking.count();
-    const totalHeldDeposit = await prisma.rentalBooking.aggregate({
-      _sum: { depositAmount: true },
-      where: { depositStatus: DepositStatus.HELD, paymentAttempt: { is: null } }
-    });
-    const sandboxHeldDeposit = await prisma.rentalBooking.aggregate({
-      _sum: { depositAmount: true },
-      where: { depositStatus: DepositStatus.HELD, paymentAttempt: { is: { status: 'PAID' } } }
-    });
+    const vietnamToday = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+    const todayStart = new Date(`${vietnamToday}T00:00:00.000Z`);
+    const tomorrowStart = new Date(todayStart.getTime() + 86400000);
+
+    const [
+      totalModels,
+      totalUnits,
+      availableUnits,
+      reservedUnits,
+      rentedUnits,
+      maintenanceUnits,
+      soldUnits,
+      totalBookings,
+      activeBookings,
+      confirmedBookings,
+      returnedPendingBookings,
+      completedBookings,
+      dueTodayBookings,
+      overdueBookings,
+      totalOrders,
+      completedOrders,
+      pendingKycCount,
+      totalHeldDeposit,
+      totalRefundedDeposit,
+      totalDeductedDeposit,
+      sandboxHeldDeposit
+    ] = await Promise.all([
+      prisma.product.count(),
+      prisma.cameraItem.count(),
+      prisma.cameraItem.count({ where: { status: ItemStatus.AVAILABLE } }),
+      prisma.cameraItem.count({ where: { status: ItemStatus.RESERVED } }),
+      prisma.cameraItem.count({ where: { status: ItemStatus.RENTED } }),
+      prisma.cameraItem.count({ where: { status: ItemStatus.MAINTENANCE } }),
+      prisma.cameraItem.count({ where: { status: ItemStatus.SOLD } }),
+      prisma.rentalBooking.count(),
+      prisma.rentalBooking.count({ where: { status: BookingStatus.ACTIVE_RENTAL } }),
+      prisma.rentalBooking.count({ where: { status: BookingStatus.CONFIRMED } }),
+      prisma.rentalBooking.count({ where: { status: BookingStatus.RETURNED_PENDING_INSPECTION } }),
+      prisma.rentalBooking.count({ where: { status: BookingStatus.COMPLETED } }),
+      prisma.rentalBooking.count({
+        where: {
+          status: BookingStatus.ACTIVE_RENTAL,
+          endDate: { gte: todayStart, lt: tomorrowStart }
+        }
+      }),
+      prisma.rentalBooking.count({
+        where: {
+          status: BookingStatus.ACTIVE_RENTAL,
+          endDate: { lt: todayStart }
+        }
+      }),
+      prisma.order.count(),
+      prisma.order.count({ where: { status: OrderStatus.COMPLETED } }),
+      prisma.user.count({ where: { kycStatus: KycStatus.PENDING } }),
+      prisma.rentalBooking.aggregate({
+        _sum: { depositAmount: true },
+        where: { depositStatus: DepositStatus.HELD, paymentAttempt: { is: null } }
+      }),
+      prisma.rentalBooking.aggregate({
+        _sum: { depositAmount: true },
+        where: { depositStatus: DepositStatus.REFUNDED }
+      }),
+      prisma.rentalBooking.aggregate({
+        _sum: { depositAmount: true },
+        where: { depositStatus: DepositStatus.DEDUCTED }
+      }),
+      prisma.rentalBooking.aggregate({
+        _sum: { depositAmount: true },
+        where: { depositStatus: DepositStatus.HELD, paymentAttempt: { is: { status: 'PAID' } } }
+      })
+    ]);
 
     res.json({
       success: true,
@@ -622,76 +858,469 @@ app.get('/api/admin/stats', requireUser, requireAdmin, async (_req: Request, res
         totalModels,
         totalUnits,
         availableUnits,
+        reservedUnits,
         rentedUnits,
+        maintenanceUnits,
+        soldUnits,
         totalBookings,
+        activeBookings,
+        confirmedBookings,
+        returnedPendingBookings,
+        completedBookings,
+        totalOrders,
+        completedOrders,
         heldDepositAmount: totalHeldDeposit._sum.depositAmount || 0,
         sandboxHeldDepositAmount: sandboxHeldDeposit._sum.depositAmount || 0,
-        utilizationRate: totalUnits > 0 ? Math.round((rentedUnits / totalUnits) * 100) : 0
+        refundedDepositAmount: totalRefundedDeposit._sum.depositAmount || 0,
+        deductedDepositAmount: totalDeductedDeposit._sum.depositAmount || 0,
+        utilizationRate: totalUnits > 0 ? Math.round((rentedUnits / totalUnits) * 100) : 0,
+        alerts: {
+          dueTodayBookings,
+          overdueBookings,
+          pendingKycCount
+        }
       }
     });
-  } catch {
-    res.status(500).json({ success: false, message: 'Không thể tải thống kê lúc này' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: 'Không thể tải thống kê: ' + error.message });
   }
 });
 
-app.get('/api/admin/inventory', requireUser, requireAdmin, async (_req: Request, res: Response) => {
+// Lấy danh sách kho máy kèm bộ lọc
+app.get('/api/admin/models', requireUser, requireAdmin, async (_req: Request, res: Response) => {
   try {
+    const models = await prisma.product.findMany({
+      select: { id: true, modelName: true, brand: true, slug: true },
+      orderBy: [{ brand: 'asc' }, { modelName: 'asc' }], take: 200
+    });
+    res.json({ success: true, data: models });
+  } catch {
+    res.status(500).json({ success: false, message: 'Không thể tải dòng máy' });
+  }
+});
+
+app.get('/api/admin/inventory', requireUser, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { status, modelId, q } = req.query;
+    const where: any = {};
+
+    if (typeof status === 'string' && Object.values(ItemStatus).includes(status as ItemStatus)) {
+      where.status = status as ItemStatus;
+    }
+
+    if (typeof modelId === 'string') {
+      const parsedModelId = parseInt(modelId, 10);
+      if (!isNaN(parsedModelId)) {
+        where.modelId = parsedModelId;
+      }
+    }
+
+    if (typeof q === 'string' && q.trim().length > 0) {
+      const term = q.trim();
+      where.OR = [
+        { serialNumber: { contains: term, mode: 'insensitive' } },
+        { product: { modelName: { contains: term, mode: 'insensitive' } } },
+        { product: { brand: { contains: term, mode: 'insensitive' } } }
+      ];
+    }
+
     const items = await prisma.cameraItem.findMany({
-      include: { product: { select: { id: true, modelName: true, slug: true, brand: true } } },
+      where,
+      include: { product: true },
       orderBy: { serialNumber: 'asc' },
       take: 200
     });
     res.json(serializeData({ success: true, data: items }));
-  } catch {
-    res.status(500).json({ success: false, message: 'Không thể tải kho máy lúc này' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: 'Không thể tải kho máy: ' + error.message });
   }
 });
 
-const inventorySchema = z.object({
+const createInventorySchema = z.object({
+  serialNumber: z.string().trim().min(3).max(64),
+  modelId: z.number().int().positive(),
+  conditionGrade: z.string().trim().min(1).max(16).default('A (98%)'),
+  shutterCount: z.number().int().min(0).max(10000000).nullable().optional(),
+  depositAmount: z.number().int().min(0),
+  sensorInspection: z.string().trim().max(500).nullable().optional(),
+  opticsCondition: z.string().trim().min(1).max(500).default('Kính trong veo, không trầy xước, không bụi mốc'),
+  scratchNotes: z.string().trim().max(500).default('Không có vết trầy xước đáng kể'),
+  status: z.nativeEnum(ItemStatus).default(ItemStatus.MAINTENANCE)
+});
+
+// Thêm con máy vật lý mới vào kho
+app.post('/api/admin/inventory', requireUser, requireAdmin, async (req: Request, res: Response) => {
+  const parsed = createInventorySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: parsed.error.issues[0]?.message || 'Dữ liệu thiết bị mới không hợp lệ'
+    });
+  }
+  if (parsed.data.status !== ItemStatus.MAINTENANCE) {
+    return res.status(400).json({ success: false, message: 'Máy mới cần được kiểm tra trước khi mở cho thuê' });
+  }
+
+  try {
+    const product = await prisma.product.findUnique({
+      where: { id: parsed.data.modelId }
+    });
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy dòng sản phẩm' });
+    }
+
+    const existingItem = await prisma.cameraItem.findUnique({
+      where: { serialNumber: parsed.data.serialNumber }
+    });
+    if (existingItem) {
+      return res.status(409).json({ success: false, message: 'Số Serial này đã tồn tại trong kho' });
+    }
+
+    const item = await prisma.cameraItem.create({
+      data: parsed.data,
+      include: { product: true }
+    });
+
+    res.status(201).json(serializeData({
+      success: true,
+      message: 'Thêm thiết bị mới vào kho thành công',
+      data: item
+    }));
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: 'Lỗi khi thêm thiết bị vào kho: ' + error.message });
+  }
+});
+
+const updateInventorySchema = z.object({
   shutterCount: z.number().int().min(0).max(10000000).nullable().optional(),
   conditionGrade: z.string().trim().min(1).max(16).optional(),
   sensorInspection: z.string().trim().max(500).nullable().optional(),
   opticsCondition: z.string().trim().min(1).max(500).optional(),
-  scratchNotes: z.string().trim().max(500).optional()
-}).strict().refine((value) => Object.keys(value).length > 0);
+  scratchNotes: z.string().trim().max(500).optional(),
+  depositAmount: z.number().int().min(0).optional(),
+  status: z.nativeEnum(ItemStatus).optional()
+}).strict().refine((value) => Object.keys(value).length > 0, {
+  message: 'Cần ít nhất một trường thông tin để cập nhật'
+});
 
+// Cập nhật thông số Technical Passport và trạng thái thiết bị
 app.patch('/api/admin/inventory/:serial', requireUser, requireAdmin, async (req: Request, res: Response) => {
-  const parsed = inventorySchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ success: false, message: 'Dữ liệu thiết bị không hợp lệ' });
-  try {
-    const item = await prisma.cameraItem.update({
-      where: { serialNumber: req.params.serial },
-      data: parsed.data,
-      include: { product: { select: { modelName: true, slug: true, brand: true } } }
+  const parsed = updateInventorySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: parsed.error.issues[0]?.message || 'Dữ liệu thiết bị không hợp lệ'
     });
-    res.json(serializeData({ success: true, data: item }));
+  }
+
+  if (parsed.data.status && parsed.data.status !== ItemStatus.AVAILABLE && parsed.data.status !== ItemStatus.MAINTENANCE) {
+    return res.status(400).json({ success: false, message: 'Trạng thái thuê và bán phải do quy trình đơn hàng cập nhật' });
+  }
+
+  try {
+    const current = await prisma.cameraItem.findUnique({ where: { serialNumber: req.params.serial } });
+    if (!current) return res.status(404).json({ success: false, message: 'Không tìm thấy thiết bị' });
+    if (parsed.data.status) {
+      if (current.status !== ItemStatus.AVAILABLE && current.status !== ItemStatus.MAINTENANCE) {
+        return res.status(409).json({ success: false, message: 'Máy đang thuộc đơn hoặc trạng thái không thể đổi thủ công' });
+      }
+      const [activeRentals, activeOrders] = await Promise.all([
+        prisma.rentalBooking.count({ where: { cameraItemId: current.id, status: { in: [BookingStatus.CONFIRMED, BookingStatus.ACTIVE_RENTAL, BookingStatus.RETURNED_PENDING_INSPECTION] } } }),
+        prisma.order.count({ where: { cameraItemId: current.id, status: { in: [OrderStatus.PENDING_PAYMENT, OrderStatus.PAID, OrderStatus.DELIVERING] } } })
+      ]);
+      if (activeRentals || activeOrders) {
+        return res.status(409).json({ success: false, message: 'Máy còn gắn với đơn chưa hoàn tất' });
+      }
+    }
+    const changed = await prisma.cameraItem.updateMany({
+      where: { id: current.id, status: current.status }, data: parsed.data
+    });
+    if (changed.count !== 1) return res.status(409).json({ success: false, message: 'Trạng thái máy vừa thay đổi, vui lòng tải lại' });
+    const item = await prisma.cameraItem.findUnique({ where: { id: current.id }, include: { product: true } });
+    res.json(serializeData({ success: true, message: 'Cập nhật thiết bị thành công', data: item }));
   } catch {
     res.status(404).json({ success: false, message: 'Không tìm thấy thiết bị hoặc không thể cập nhật' });
   }
 });
 
-app.get('/api/admin/users', requireUser, requireAdmin, async (_req: Request, res: Response) => {
+// Quản lý Đơn mua máy cũ kiểm định (Certified Used Sales)
+app.get('/api/admin/orders', requireUser, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const users = await prisma.user.findMany({
-      select: {
-        id: true, email: true, fullName: true, phone: true, role: true,
-        kycStatus: true, createdAt: true
+    const { status, q } = req.query;
+    const where: any = {};
+
+    if (typeof status === 'string' && Object.values(OrderStatus).includes(status as OrderStatus)) {
+      where.status = status as OrderStatus;
+    }
+
+    if (typeof q === 'string' && q.trim().length > 0) {
+      const term = q.trim();
+      where.OR = [
+        { orderCode: { contains: term, mode: 'insensitive' } },
+        { user: { fullName: { contains: term, mode: 'insensitive' } } },
+        { user: { email: { contains: term, mode: 'insensitive' } } },
+        { user: { phone: { contains: term, mode: 'insensitive' } } },
+        { cameraItem: { serialNumber: { contains: term, mode: 'insensitive' } } }
+      ];
+    }
+
+    const orders = await prisma.order.findMany({
+      where,
+      include: {
+        user: {
+          select: { id: true, email: true, fullName: true, phone: true, address: true }
+        },
+        cameraItem: {
+          include: { product: true }
+        }
       },
       orderBy: { createdAt: 'desc' },
       take: 100
     });
-    res.json({ success: true, data: users });
-  } catch {
-    res.status(500).json({ success: false, message: 'Không thể tải người dùng lúc này' });
+
+    res.json(serializeData({ success: true, data: orders }));
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: 'Không thể tải danh sách đơn mua: ' + error.message });
   }
 });
 
-app.patch('/api/admin/users/:id/kyc', requireUser, requireAdmin, (_req: Request, res: Response) => {
-  res.status(503).json({ success: false, message: 'Chưa có quy trình lưu trữ và duyệt giấy tờ định danh.' });
+const updateOrderStatusSchema = z.object({
+  status: z.nativeEnum(OrderStatus),
+  shippingAddress: z.string().trim().max(500).optional(),
+  notes: z.string().trim().max(500).optional(),
+  warrantyMonths: z.number().int().min(1).max(36).optional()
 });
 
-// Start Server
-app.listen(PORT, () => {
+// Cập nhật trạng thái đơn mua, kích hoạt bảo hành 6 tháng & chuyển máy sang SOLD
+app.patch('/api/admin/orders/:id/status', requireUser, requireAdmin, requireApprovedAdminWorkflow, async (req: Request, res: Response) => {
+  const parsed = updateOrderStatusSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: parsed.error.issues[0]?.message || 'Dữ liệu cập nhật đơn hàng không hợp lệ'
+    });
+  }
+
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id },
+      include: { cameraItem: true }
+    });
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng' });
+    }
+
+    const nextStatus = parsed.data.status;
+    const months = parsed.data.warrantyMonths ?? order.warrantyMonths ?? 6;
+    const warrantyExpiry = new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000);
+
+    let targetCameraStatus: ItemStatus | undefined;
+    if (nextStatus === OrderStatus.PAID || nextStatus === OrderStatus.DELIVERING || nextStatus === OrderStatus.COMPLETED) {
+      targetCameraStatus = ItemStatus.SOLD;
+    } else if (nextStatus === OrderStatus.CANCELLED) {
+      targetCameraStatus = ItemStatus.AVAILABLE;
+    }
+
+    const [updatedOrder] = await prisma.$transaction([
+      prisma.order.update({
+        where: { id: req.params.id },
+        data: {
+          status: nextStatus,
+          shippingAddress: parsed.data.shippingAddress ?? order.shippingAddress,
+          notes: parsed.data.notes ?? order.notes,
+          warrantyMonths: months,
+          warrantyExpiresAt: (nextStatus === OrderStatus.PAID || nextStatus === OrderStatus.DELIVERING || nextStatus === OrderStatus.COMPLETED)
+            ? warrantyExpiry
+            : order.warrantyExpiresAt
+        },
+        include: {
+          user: { select: { id: true, email: true, fullName: true, phone: true } },
+          cameraItem: { include: { product: true } }
+        }
+      }),
+      ...(targetCameraStatus
+        ? [
+            prisma.cameraItem.update({
+              where: { id: order.cameraItemId },
+              data: { status: targetCameraStatus }
+            })
+          ]
+        : [])
+    ]);
+
+    res.json(serializeData({
+      success: true,
+      message: 'Cập nhật trạng thái đơn mua và bảo hành thành công',
+      data: updatedOrder
+    }));
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: 'Lỗi khi cập nhật đơn mua: ' + error.message });
+  }
+});
+
+// Quản lý thành viên & Danh sách hồ sơ eKYC
+app.get('/api/admin/users', requireUser, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { role, kycStatus, q } = req.query;
+    const where: any = {};
+
+    if (typeof role === 'string' && Object.values(Role).includes(role as Role)) {
+      where.role = role as Role;
+    }
+
+    if (typeof kycStatus === 'string' && Object.values(KycStatus).includes(kycStatus as KycStatus)) {
+      where.kycStatus = kycStatus as KycStatus;
+    }
+
+    if (typeof q === 'string' && q.trim().length > 0) {
+      const term = q.trim();
+      where.OR = [
+        { fullName: { contains: term, mode: 'insensitive' } },
+        { email: { contains: term, mode: 'insensitive' } },
+        { phone: { contains: term, mode: 'insensitive' } }
+      ];
+    }
+
+    const users = await prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        phone: true,
+        address: true,
+        role: true,
+        kycStatus: true,
+        createdAt: true,
+        updatedAt: true,
+        _count: {
+          select: {
+            rentals: true,
+            orders: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100
+    });
+
+    res.json({ success: true, data: users });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: 'Không thể tải người dùng: ' + error.message });
+  }
+});
+
+const updateKycSchema = z.object({
+  kycStatus: z.nativeEnum(KycStatus),
+  idCardNumber: z.string().trim().max(20).optional(),
+  rejectReason: z.string().trim().max(500).optional()
+});
+
+// Thẩm định hồ sơ định danh eKYC
+app.patch('/api/admin/users/:id/kyc', requireUser, requireAdmin, requireApprovedAdminWorkflow, async (req: Request, res: Response) => {
+  const parsed = updateKycSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: parsed.error.issues[0]?.message || 'Dữ liệu thẩm định eKYC không hợp lệ'
+    });
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.id }
+    });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: req.params.id },
+      data: {
+        kycStatus: parsed.data.kycStatus,
+        ...(parsed.data.idCardNumber ? { idCardNumber: parsed.data.idCardNumber } : {})
+      },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        phone: true,
+        role: true,
+        kycStatus: true,
+        idCardNumber: true,
+        updatedAt: true
+      }
+    });
+
+    const statusMessage =
+      parsed.data.kycStatus === KycStatus.VERIFIED
+        ? 'Đã duyệt định danh eKYC thành công (giảm 50% tiền cọc khi thuê)'
+        : parsed.data.kycStatus === KycStatus.REJECTED
+        ? `Đã từ chối hồ sơ eKYC${parsed.data.rejectReason ? ': ' + parsed.data.rejectReason : ''}`
+        : 'Đã cập nhật trạng thái hồ sơ eKYC';
+
+    res.json({
+      success: true,
+      message: statusMessage,
+      data: updatedUser
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: 'Lỗi khi cập nhật trạng thái eKYC: ' + error.message });
+  }
+});
+
+const updateRoleSchema = z.object({
+  role: z.nativeEnum(Role)
+});
+
+// Phân quyền vai trò người dùng (CUSTOMER, ADMIN, TECHNICIAN)
+app.patch('/api/admin/users/:id/role', requireUser, requireAdmin, requireApprovedAdminWorkflow, async (req: Request, res: Response) => {
+  const parsed = updateRoleSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: parsed.error.issues[0]?.message || 'Quyền người dùng không hợp lệ'
+    });
+  }
+
+  try {
+    if (res.locals.user.id === req.params.id && parsed.data.role !== Role.ADMIN) {
+      const adminCount = await prisma.user.count({ where: { role: Role.ADMIN } });
+      if (adminCount <= 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Không thể hạ quyền Admin duy nhất trong hệ thống'
+        });
+      }
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { role: parsed.data.role },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        role: true,
+        updatedAt: true
+      }
+    });
+
+    res.json({
+      success: true,
+      message: `Đã cập nhật phân quyền thành công: ${updatedUser.role}`,
+      data: updatedUser
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: 'Lỗi khi cập nhật phân quyền: ' + error.message });
+  }
+});
+
+export { app };
+
+// Integration tests attach their own ephemeral listener and isolated database.
+if (process.env.FILMILIAR_TEST_MODE !== 'routes') app.listen(PORT, () => {
 
   console.log(`===============================================`);
   console.log(`🎬 Filmiliar Server running on port ${PORT}`);

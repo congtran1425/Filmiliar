@@ -143,6 +143,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Action Button & User Profile */}
         <div className="flex flex-shrink-0 items-center gap-1.5 sm:gap-2">
+          {currentUser?.role === 'ADMIN' && <Link to="/admin" className="hidden min-h-11 items-center gap-1.5 whitespace-nowrap rounded-lg bg-film-teal px-3 text-xs font-bold text-white hover:bg-film-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-film-teal xl:inline-flex"><ShieldCheck className="h-4 w-4" /> Trung tâm quản trị</Link>}
           {currentUser ? (
             <div className="relative">
               <button
@@ -178,7 +179,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-film-card text-film-warm font-bold transition-colors flex items-center space-x-2 min-h-[44px]"
                     >
                       <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                      <span>Trang quản trị</span>
+                      <span>Trung tâm quản trị</span>
                     </button>
                   )}
 

@@ -12,7 +12,8 @@ process.env.PAYMENT_TEST_DATABASE_URL = url.toString();
 
 for (const [command, args] of [
   ['npx', ['prisma', 'migrate', 'deploy', '--schema=apps/server/prisma/schema.prisma']],
-  ['node', ['--test', 'apps/server/tests/payment-flow.integration.test.mjs']]
+  ['node', ['--test', 'apps/server/tests/payment-flow.integration.test.mjs']],
+  ['node', ['--test', 'apps/server/tests/admin-routes.integration.test.mjs']]
 ]) {
   const result = spawnSync(command, args, { env: process.env, stdio: 'inherit' });
   if (result.status !== 0) process.exit(result.status || 1);
