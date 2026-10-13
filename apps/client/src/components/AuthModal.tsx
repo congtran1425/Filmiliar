@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Lock, Mail, User, Phone, ArrowRight, Loader2, Sparkles } from 'lucide-react';
+import { X, Lock, Mail, User, Phone, ArrowRight, Loader2 } from 'lucide-react';
 import { apiUrl } from '../lib/api';
 
 interface AuthModalProps {
@@ -9,8 +9,6 @@ interface AuthModalProps {
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSuccess }) => {
-  if (!isOpen) return null;
-
   const [mode, setMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
@@ -54,16 +52,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
     }
   };
 
-  // Demo 1-click login
-  const handleQuickLogin = (role: 'CUSTOMER' | 'ADMIN') => {
-    if (role === 'ADMIN') {
-      setEmail('admin@filmiliar.vn');
-      setPassword('123456');
-    } else {
-      setEmail('khachhang@filmiliar.vn');
-      setPassword('123456');
-    }
-  };
+  if (!isOpen) return null;
 
   return (
     <div 
@@ -212,31 +201,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
             )}
           </button>
 
-          {/* Quick Demo Fill Buttons */}
-          <div className="pt-3 border-t border-film-border/80 space-y-2">
-            <span className="text-[10px] text-slate-400 block uppercase font-mono tracking-wider text-center">
-              Điền nhanh tài khoản demo kiểm tra:
-            </span>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('CUSTOMER')}
-                className="min-h-[44px] px-2.5 rounded-xl bg-film-card hover:bg-film-border/50 border border-film-border text-slate-200 text-xs flex items-center justify-center space-x-1.5 transition-colors"
-              >
-                <User className="w-3.5 h-3.5 text-film-warm" />
-                <span>Khách hàng</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('ADMIN')}
-                className="min-h-[44px] px-2.5 rounded-xl bg-film-card hover:bg-film-border/50 border border-film-border text-slate-200 text-xs flex items-center justify-center space-x-1.5 transition-colors"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-film-warm" />
-                <span>Admin Filmiliar</span>
-              </button>
-            </div>
-          </div>
         </form>
       </div>
     </div>

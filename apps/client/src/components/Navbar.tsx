@@ -7,7 +7,6 @@ import {
   LogOut, 
   ChevronDown, 
   BookOpen, 
-  Layers, 
   Menu, 
   X, 
   Camera, 
@@ -169,8 +168,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                     onClick={onOpenMyRentals}
                     className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-film-card text-slate-200 transition-colors flex items-center space-x-2 min-h-[44px]"
                   >
-                    <Layers className="w-4 h-4 text-film-warm" />
-                    <span>Đơn thuê của tôi</span>
+                    <User className="w-4 h-4 text-film-warm" />
+                    <span>Tài khoản của tôi</span>
                   </button>
 
                   {currentUser.role === 'ADMIN' && (
@@ -179,7 +178,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-film-card text-film-warm font-bold transition-colors flex items-center space-x-2 min-h-[44px]"
                     >
                       <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                      <span>Admin Hub</span>
+                      <span>Trang quản trị</span>
                     </button>
                   )}
 
@@ -384,8 +383,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                     }}
                     className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg hover:bg-film-paperRaised text-xs font-medium text-film-ink min-h-[44px] text-left transition-colors"
                   >
-                    <Layers className="w-4 h-4 text-film-warm" />
-                    <span>Đơn thuê của tôi</span>
+                    <User className="w-4 h-4 text-film-warm" />
+                    <span>Tài khoản của tôi</span>
                   </button>
                   {currentUser.role === 'ADMIN' && (
                     <button
@@ -396,7 +395,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg hover:bg-film-paperRaised text-xs font-bold text-film-teal min-h-[44px] text-left transition-colors"
                     >
                       <ShieldCheck className="w-4 h-4 text-film-teal" />
-                      <span>Admin Hub</span>
+                      <span>Trang quản trị</span>
                     </button>
                   )}
                   <button

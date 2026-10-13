@@ -1,11 +1,13 @@
 # Filmiliar - E-Commerce Camera Rental & Certified Used Platform
 > **Đề tài**: Xây dựng chiến lược kinh doanh và nền tảng thương mại điện tử cho website cho thuê và bán máy ảnh second-hand kiểm định tại TP.HCM (2026 - 2029).  
 > **Nhóm thực hiện**: Nhóm 1 - Khóa TMĐT, Đại học Kinh tế TP.HCM (UEH).  
-> **Triển khai hiện tại (11/10/2026)**: Frontend trên **Vercel**, API và PostgreSQL riêng trên **Oracle Cloud VPS**. Tích hợp Media trên Hosting iNet chưa hoàn thiện.
+> **Triển khai hiện tại**: Frontend trên **Vercel**, API và PostgreSQL riêng trên **Oracle Cloud VPS**. Tích hợp Media trên Hosting iNet chưa hoàn thiện.
 
 ## Trạng thái hiện tại
 
 Frontend có URL riêng cho trang chủ `/`, danh mục thuê `/thue`, danh mục mua `/mua`, chi tiết `/thiet-bi/:slug`, trang xem lại thuê/mua và các trang nội dung `/thong-tin/:topic`. Tại trang xem lại, nút gửi yêu cầu bị khóa: **không tạo đơn, không giữ máy, không thanh toán**. API tạo thanh toán cũng trả 503 theo mặc định. Quy tắc đặt cọc, bảo hành và giao nhận chưa được nhóm chốt.
+
+Tài khoản có trang `/dang-nhap`, `/dang-ky`, `/tai-khoan`; quản trị viên có `/admin`. Tài khoản mới đăng ký luôn có vai trò khách hàng. Trang tài khoản hỗ trợ sửa hồ sơ, đổi mật khẩu và xem các đơn đã ghi trong cơ sở dữ liệu. Trang quản trị cho xem thống kê, đơn thuê, người dùng và sửa dữ liệu tình trạng thiết bị; các thao tác xác nhận giao dịch, đổi trạng thái cọc, duyệt eKYC vẫn khóa. Hosting ảnh công khai không dùng để nhận giấy tờ định danh thật.
 
 Ảnh trong dữ liệu seed chỉ là ảnh minh họa và nhiều ảnh không đúng mẫu thiết bị; các ảnh sai chủ đề đã được ẩn ở frontend. Khi API không sẵn sàng, frontend hiển thị hai sản phẩm mẫu có nhãn rõ để xem trước UI. Dữ liệu tình trạng từ seed chưa phải Passport có bằng chứng kiểm định.
 
@@ -61,4 +63,10 @@ npm run dev
 
 Đọc [hướng dẫn VPS và Vercel](docs/deployment_shared_vps.md) trước khi triển khai. Cấu hình Docker Compose dành riêng cho Filmiliar dùng PostgreSQL riêng, API bind vào `127.0.0.1:3081` trên VPS. Cổng `5000` chỉ là cổng nội bộ container; không dùng PM2 hoặc chiếm `80/443`.
 
-Website: `https://filmiliar.congtc145.id.vn`. API: `https://api-filmiliar.congtc145.id.vn`. Client Vercel đã đặt `VITE_API_BASE_URL` bằng origin API ở cả Production và Preview. Đây là URL công khai trong bundle, không phải khóa bí mật. Chưa kết nối GitHub với project Vercel; khi kết nối monorepo cần chọn thư mục gốc `apps/client`. Tài liệu nhóm và hướng dẫn iNet riêng được giữ trên máy, không đưa lên GitHub.
+Website: `https://filmiliar.congtc145.id.vn`. API: `https://api-filmiliar.congtc145.id.vn`. Client Vercel đã đặt `VITE_API_BASE_URL` bằng origin API ở cả Production và Preview. Đây là URL công khai trong bundle, không phải khóa bí mật. Project Vercel đã liên kết GitHub và build từ `apps/client`. Tài liệu nhóm và hướng dẫn iNet riêng được giữ trên máy, không đưa lên GitHub.
+
+### Tài khoản quản trị và kiểm tra
+
+Không có mật khẩu mẫu trong mã nguồn hoặc nút tự điền tài khoản. Sau khi build API, quản trị viên có thể tạo tài khoản từ môi trường vận hành bằng `node apps/server/dist/provision-user.js <email> ADMIN <họ tên>`; chương trình đọc mật khẩu dài 20–128 ký tự qua stdin và từ chối ghi đè tài khoản có sẵn. Sinh và nhập mật khẩu trực tiếp trên máy chủ, giữ ngoài repository. Khách hàng có thể tự đăng ký tại `/dang-ky`.
+
+Chạy `npm run test -w apps/server` để kiểm tra cơ chế băm mật khẩu, phiên đăng nhập và vô hiệu hóa phiên cũ sau khi đổi mật khẩu. `npm run build` kiểm tra cả server và client. Khi nâng cấp API từ token cũ sang token hiện tại, người dùng cần đăng nhập lại.
