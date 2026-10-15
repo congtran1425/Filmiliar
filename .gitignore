@@ -57,3 +57,4 @@ server.js
 *.tmp
 *.temp
 
+.vercel
