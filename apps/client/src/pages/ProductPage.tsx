@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ArrowLeft, Camera, Check, Info, ChevronDown, ChevronUp } from 'lucide-react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { CameraUnit, formatVnd } from '../lib/catalog';
+import { CameraUnit, formatVnd, PRODUCT_GALLERY } from '../lib/catalog';
 import { useProduct } from '../lib/useProduct';
 
 const unitStatus: Record<CameraUnit['status'], string> = {
@@ -17,6 +17,7 @@ export function ProductPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { product, isDemo, loading, error } = useProduct(slug);
   const [specsOpen, setSpecsOpen] = useState(false);
+  const [selectedAngleIndex, setSelectedAngleIndex] = useState(0);
 
   if (loading) {
     return (
@@ -89,28 +90,57 @@ export function ProductPage() {
         
         {/* Left Column: Photo & Specs */}
         <div className="space-y-5">
-          {/* Main Photo Card */}
-          <figure className="overflow-hidden rounded-2xl border border-film-border bg-film-card shadow-sm">
-            <div className="aspect-[4/3] sm:aspect-[16/10] bg-film-dark relative">
-              {product.thumbnailUrl ? (
-                <img 
-                  src={product.thumbnailUrl} 
-                  alt={`Ảnh minh họa dòng máy ${product.name}`} 
-                  className="h-full w-full object-cover" 
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-slate-500">
-                  <Camera className="h-16 w-16" />
+          {/* Main Photo Card with Angle Selector */}
+          {(() => {
+            const angles = (product?.slug && PRODUCT_GALLERY[product.slug]) || (product?.thumbnailUrl ? [{ label: 'Tổng thể', url: product.thumbnailUrl }] : []);
+            const currentAngle = angles[selectedAngleIndex] || angles[0];
+            const activeImage = currentAngle?.url || product?.thumbnailUrl;
+
+            return (
+              <figure className="overflow-hidden rounded-2xl border border-film-border bg-film-card shadow-sm">
+                <div className="aspect-[4/3] sm:aspect-[16/10] bg-film-dark relative">
+                  {activeImage ? (
+                    <img 
+                      src={activeImage} 
+                      alt={`Ảnh ${currentAngle?.label || 'minh họa'} dòng máy ${product.name}`} 
+                      className="h-full w-full object-cover transition-all duration-300" 
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-slate-500">
+                      <Camera className="h-16 w-16" />
+                    </div>
+                  )}
+                  <span className="absolute bottom-3 left-3 rounded-md bg-film-dark/90 px-2.5 py-1 text-[11px] text-slate-300 border border-film-border/60">
+                    {currentAngle ? `Góc: ${currentAngle.label}` : 'Ảnh dòng máy'}
+                  </span>
                 </div>
-              )}
-              <span className="absolute bottom-3 left-3 rounded-md bg-film-dark/90 px-2.5 py-1 text-[11px] text-slate-300 border border-film-border/60">
-                Ảnh minh họa dòng máy · chưa có ảnh từng chiếc
-              </span>
-            </div>
-            <figcaption className="p-3.5 text-xs text-slate-400 bg-film-card/80 border-t border-film-border/60 leading-relaxed">
-              Hình ảnh minh họa kiểu dáng chung. Để xem tình trạng vết xước, số shot và phụ kiện, vui lòng kiểm tra mục thông tin từng chiếc máy bên dưới.
-            </figcaption>
-          </figure>
+
+                {/* Angle selection buttons */}
+                {angles.length > 1 && (
+                  <div className="flex flex-wrap gap-2 p-3 bg-film-dark/70 border-t border-film-border/60">
+                    {angles.map((ang, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setSelectedAngleIndex(idx)}
+                        className={`min-h-[36px] px-3 py-1 rounded-lg text-xs font-semibold transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-film-warm ${
+                          selectedAngleIndex === idx
+                            ? 'bg-film-warm text-film-dark font-bold shadow-sm'
+                            : 'bg-film-card text-slate-300 hover:text-white border border-film-border hover:border-slate-500'
+                        }`}
+                      >
+                        {ang.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <figcaption className="p-3.5 text-xs text-slate-400 bg-film-card/80 border-t border-film-border/60 leading-relaxed">
+                  Hình ảnh chụp chi tiết các góc máy. Để xem tình trạng vết xước, số shot và phụ kiện, vui lòng kiểm tra mục thông tin từng chiếc máy bên dưới.
+                </figcaption>
+              </figure>
+            );
+          })()}
 
           {/* Quick Price Box on Mobile (placed right after photo for quick scan) */}
           <section className="lg:hidden rounded-2xl border border-film-border bg-film-card p-4">

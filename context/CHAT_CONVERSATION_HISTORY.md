@@ -1971,6 +1971,42 @@ The current local time is: 2026-10-13T11:45:48+07:00.
 The user's current state is as follows:
 Active Document: d:\Filmiliar\deploy\deploy-shared-vps.sh (LANGUAGE_SHELL)
 Cursor is on line: 1
-</ADDITIONAL_METADATA>
 ```
+
+#### 🤖 [PHẢN HỒI KỸ THUẬT CỦA TRỢ LÝ AI]
+
+Tôi đã ghi lại toàn bộ lịch sử trao đổi vào tài liệu này và cập nhật cẩm nang bàn giao thiết bị Desktop [HANDOVER_DESKTOP_GUIDE.md](file:///d:/Filmiliar/HANDOVER_DESKTOP_GUIDE.md). Toàn bộ ngữ cảnh kỹ thuật của dự án đã được bảo toàn 100% để tiếp tục trên máy mới.
+
+---
+
+### 👤 [YÊU CẦU NGƯỜI DÙNG #30] — (21:30:00 26/10/2026)
+
+```markdown
+<USER_REQUEST>
+bạn xem ở thư mục bên ngoài chứa thư mục gốc của dự án này, có 1 file word chứa thông tin những dòng máy mới, 1 file chứa ảnh. có 1 note 1 cái sp sony alpha a7 thành cái canon eos m50
+đọc toàn bộ dự án để biết được bối cảnh. có gì cần hỏi không
+</USER_REQUEST>
+```
+
+#### 🤖 [PHẢN HỒI KỸ THUẬT CỦA TRỢ LÝ AI]
+
+1. **Đọc tài liệu Word & Thư mục ảnh**:
+   - Trích xuất bảng 14 thiết bị từ `Model.docx`: 10 Thân máy Mirrorless + 4 Ống kính.
+   - Sản phẩm `Sony Alpha A7 III` được chuyển đổi thành `Canon EOS M50` với mức giá tối ưu thị trường sinh viên: Giá gốc 14.500.000 VNĐ, Thuê 170.000 VNĐ/ngày, Bán 2nd 10.000.000 VNĐ, Cọc 1.500.000 VNĐ.
+   - Thư mục ảnh `Mirrorless` được chuẩn hóa toàn bộ 60 ảnh sang định dạng URL không dấu (hero, front, back, top, detail) và nén thành gói sẵn sàng upload `filmiliar-media-bundle.zip` (8MB) tại `C:\Users\Administrator\Downloads`.
+   - Đồng thời copy toàn bộ ảnh vào `apps/client/public/images/products/` để phục vụ hiển thị cục bộ và trên Vercel ngay cả khi chưa upload hosting.
+
+2. **Cập nhật mã nguồn hệ thống**:
+   - `apps/server/prisma/seed.ts`: Thay thế toàn bộ 14 dòng sản phẩm mới và 16 bản ghi con máy `CameraItem` cụ thể với số serial, số shot, tình trạng thẩm định và tiền cọc chuẩn xác.
+   - `apps/client/src/lib/catalog.ts`: Tích hợp `DEMO_PRODUCTS`, `PRODUCT_THUMBNAILS`, `PRODUCT_GALLERY`.
+   - `apps/client/src/pages/ProductPage.tsx`: Thêm bộ chọn đa góc chụp trực quan (Tổng thể, Mặt trước, Mặt sau, Mặt trên).
+   - `apps/server/src/index.ts`: Cập nhật luật tư vấn thông minh (Camera Match Quiz) sang các dòng máy mới.
+
+3. **Kiểm thử & Bàn giao**:
+   - `npm install` hoàn tất trên Desktop.
+   - Client build (`npm run build -w apps/client`): Đạt 100%.
+   - Server build (`npm run build -w apps/server`): Đạt 100%.
+   - Server tests (`npm run test -w apps/server`): 6/6 tests passed.
+   - Sẵn sàng đẩy toàn bộ thay đổi lên nhánh `feature/desktop-workspace` trên GitHub origin.
+
 

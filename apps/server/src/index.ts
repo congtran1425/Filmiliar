@@ -251,27 +251,27 @@ app.post('/api/quiz/recommend', async (req: Request, res: Response) => {
 
     if (purpose === 'CONCERT' || purpose === 'TRAVEL_SHORT') {
       action = 'RENT';
-      // Match Sony A7 IV or Canon R6
-      matchedProduct = allProducts.find(p => p.id === 1) || allProducts[0];
-      reason = 'Nhu cầu đi concert hoặc du lịch ngắn hạn cần khả năng khử nhiễu ISO cao và lấy nét siêu nhanh. Thuê Sony A7 IV giúp bạn bắt trọn khoảnh khắc idol mà chi phí chỉ bằng 1/100 giá mua mới!';
+      // Match Sony Alpha A6700 or Fujifilm X-T50
+      matchedProduct = allProducts.find(p => p.slug === 'sony-alpha-a6700') || allProducts[0];
+      reason = 'Nhu cầu đi concert hoặc du lịch sự kiện cần khả năng lấy nét AI nhận diện chủ thể cực nhạy và chống rung mạnh mẽ. Thuê Sony Alpha A6700 giúp bạn bắt trọn từng khoảnh khắc idol mà chi phí chỉ bằng 1/100 giá mua mới!';
     } else if (purpose === 'TIKTOK_VLOG') {
       action = 'RENT';
-      // Match Canon R50 or Sony ZV-E10
-      matchedProduct = allProducts.find(p => p.id === 3 || p.id === 6) || allProducts[2];
-      reason = 'Sony ZV-E10 / Canon R50 cực kỳ nhỏ gọn (dưới 380g), màn hình lật xoay và micro thu âm tốt, là lựa chọn số 1 cho các bạn làm video TikTok, vlog du lịch.';
+      // Match Sony ZV-E10 or Canon EOS M50
+      matchedProduct = allProducts.find(p => p.slug === 'sony-zv-e10' || p.slug === 'canon-eos-m50') || allProducts[0];
+      reason = 'Sony ZV-E10 / Canon EOS M50 cực kỳ nhỏ gọn (dưới 390g), màn hình lật xoay selfie và tính năng làm đẹp da / Product Showcase, là lựa chọn số 1 cho các bạn làm video TikTok, vlog du lịch.';
     } else if (purpose === 'LEARN_PHOTOGRAPHY' || experienceLevel === 'BEGINNER') {
       if (budgetRange === 'HIGH') {
         action = 'BUY';
-        matchedProduct = allProducts.find(p => p.id === 4) || allProducts[3]; // Fuji X-T30 II
-        reason = 'Fujifilm X-T30 II sở hữu các bộ lọc màu film giả lập huyền thoại, giúp bạn có ngay bức ảnh đậm chất điện ảnh mà không cần tốn thời gian học chỉnh sửa hậu kỳ.';
+        matchedProduct = allProducts.find(p => p.slug === 'fujifilm-x-t50' || p.slug === 'fujifilm-x-t30-ii') || allProducts[0];
+        reason = 'Dòng máy Fujifilm sở hữu các bộ lọc màu film giả lập huyền thoại, giúp bạn có ngay bức ảnh đậm chất điện ảnh mà không cần tốn thời gian học chỉnh sửa hậu kỳ.';
       } else {
         action = 'RENT';
-        matchedProduct = allProducts.find(p => p.id === 6) || allProducts[5]; // Canon R50
-        reason = 'Khuyên bạn nên thuê trải nghiệm Canon R50 trong 2-3 ngày để làm quen với thao tác máy ảnh trước khi đầu tư số tiền lớn để sở hữu.';
+        matchedProduct = allProducts.find(p => p.slug === 'canon-eos-m50' || p.slug === 'fujifilm-x-t100' || p.slug === 'nikon-z30') || allProducts[0];
+        reason = 'Khuyên bạn nên thuê trải nghiệm Canon EOS M50 / Nikon Z30 trong 2-3 ngày để làm quen với thao tác máy ảnh trước khi đầu tư số tiền lớn để sở hữu.';
       }
     } else {
-      matchedProduct = allProducts.find(p => p.id === 2) || allProducts[1]; // Sony A7 III
-      reason = 'Bộ máy toàn diện, đáp ứng hoàn hảo cho chụp chân dung ngoại cảnh, kỷ yếu và sự kiện với chi phí thuê cực kỳ tiết kiệm.';
+      matchedProduct = allProducts.find(p => p.slug === 'fujifilm-x-s10' || p.slug === 'canon-eos-r50') || allProducts[0];
+      reason = 'Bộ máy toàn diện có chống rung cảm biến IBIS, đáp ứng hoàn hảo cho chụp chân dung ngoại cảnh, kỷ yếu và du lịch với chi phí thuê cực kỳ tiết kiệm.';
     }
 
     const firstUnit = matchedProduct.units[0];

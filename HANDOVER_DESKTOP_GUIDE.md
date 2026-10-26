@@ -75,8 +75,23 @@ Trong database (đã seed qua `apps/server/prisma/seed.ts`):
 
 ---
 
-## 4. CÁC ĐẦU VIỆC TIẾP THEO KHI LÀM VIỆC TRÊN DESKTOP
+## 4. DANH MỤC THIẾT BỊ MỚI & HƯỚNG DẪN MEDIA HOSTING (26/10/2026)
+
+1. **Danh mục 10 Thân máy Mirrorless + 4 Ống kính mới**:
+   - Đã đồng bộ từ file `Model.docx` và thư mục ảnh `Mirrorless`.
+   - Sản phẩm `Sony Alpha A7 III` đã được chuyển đổi thành `Canon EOS M50` với mức giá thị trường tối ưu (Gốc: 14.5tr, Thuê: 170k/ngày, Cũ: 10tr, Cọc: 1.5tr).
+   - Đã tạo sẵn 16 bản ghi con máy `CameraItem` (Technical Passport với số serial, số shot, tình trạng kính, cảm biến và tiền cọc) trong `apps/server/prisma/seed.ts`.
+   - Frontend đã hỗ trợ bộ chọn xem chi tiết đa góc chụp: Tổng thể, Mặt trước, Mặt sau, Mặt trên (`apps/client/src/pages/ProductPage.tsx`).
+
+2. **Cách đưa gói ảnh lên hosting `media.congtc145.id.vn`**:
+   - File nén đã chuẩn hóa: `filmiliar-media-bundle.zip` (nằm ở thư mục `Downloads`).
+   - Mở File Manager của hosting iNet (`media.congtc145.id.vn`), tải file zip lên thư mục web gốc (`public_html/`) và bấm **Extract (Giải nén)**.
+   - Thư mục ảnh cục bộ dự phòng cũng đã được tích hợp sẵn tại `apps/client/public/images/products/`.
+
+---
+
+## 5. CÁC ĐẦU VIỆC TIẾP THEO KHI LÀM VIỆC TRÊN DESKTOP
 
 1. **Cho Codex**: Hoàn thiện hiển thị mã VietQR trên modal thanh toán client (`apps/client/src/pages/ReviewPage.tsx` và `services/payment-flow.ts`).
 2. **Cho Client Admin Hub**: Kết nối các nút bấm trên giao diện `apps/client/src/pages/AdminPage.tsx` vào các API Backend tương ứng vừa hoàn thành.
-3. **Cập nhật lên VPS**: SSH vào VPS, `cd /opt/apps/filmiliar/repo && git pull origin main && bash deploy/deploy-shared-vps.sh`.
+3. **Cập nhật lên VPS**: SSH vào VPS, `cd /opt/apps/filmiliar/repo && git pull origin main && bash deploy/deploy-shared-vps.sh` và chạy seed dữ liệu mới `npx prisma db seed`.
