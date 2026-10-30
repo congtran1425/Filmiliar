@@ -19,17 +19,17 @@ FILMILIAR_JWT_SECRET=$jwt_secret
 FILMILIAR_CORS_ORIGIN=http://localhost:5173,https://filmiliar.congtc145.id.vn
 FILMILIAR_DEMO_CATALOG=true
 FILMILIAR_ENABLE_UPLOADS=false
-FILMILIAR_PAYMENT_MODE=sandbox
+FILMILIAR_PAYMENT_MODE=disabled
 FILMILIAR_ZALOPAY_APP_ID=2553
-FILMILIAR_ZALOPAY_KEY1=PcY4iZIKFCIdgZvA6ueMcMHHUbRLYjPL
-FILMILIAR_ZALOPAY_KEY2=kLtgPl8HHhfvMuDHPwKfgfsY4Ydm9eIz
+FILMILIAR_ZALOPAY_KEY1=
+FILMILIAR_ZALOPAY_KEY2=
 FILMILIAR_ZALOPAY_ENDPOINT=https://sb-openapi.zalopay.vn/v2/create
 FILMILIAR_ZALOPAY_QUERY_ENDPOINT=https://sb-openapi.zalopay.vn/v2/query
 FILMILIAR_ZALOPAY_CALLBACK_URL=https://api-filmiliar.congtc145.id.vn/api/payment/callback
 FILMILIAR_STORAGE_MODE=http_api
 FILMILIAR_MEDIA_PUBLIC_URL=https://media.congtc145.id.vn
 FILMILIAR_INET_UPLOAD_ENDPOINT=https://media.congtc145.id.vn/api_upload.php
-FILMILIAR_INET_UPLOAD_SECRET_KEY=filmiliar_secret_upload_key_2026
+FILMILIAR_INET_UPLOAD_SECRET_KEY=
 EOF
 chmod 600 "$config_file"
 unset db_password jwt_secret

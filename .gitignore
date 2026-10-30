@@ -32,6 +32,9 @@ private/
 /extracted_content.txt
 /docs/
 docs/
+/context/
+/filmiliar-media-bundle.zip
+/HANDOVER_DESKTOP_GUIDE.md
 
 # Logs
 npm-debug.log*

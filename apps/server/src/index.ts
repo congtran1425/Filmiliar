@@ -114,7 +114,7 @@ app.get('/api/cameras', async (req: Request, res: Response) => {
   try {
     const { brand, category } = req.query;
 
-    const where: any = {};
+    const where: any = { isPublished: true };
     if (brand && brand !== 'ALL') {
       where.brand = { equals: String(brand), mode: 'insensitive' };
     }

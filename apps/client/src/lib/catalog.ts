@@ -419,10 +419,12 @@ export const DEMO_PRODUCTS: ProductDetail[] = [
 export const formatVnd = (value: number) => `${value.toLocaleString('vi-VN')} đ`;
 
 export function displayThumbnail(url: string | null, slug?: string): string | null {
-  if (slug && PRODUCT_THUMBNAILS[slug]) {
-    return url || PRODUCT_THUMBNAILS[slug];
+  const local = slug ? PRODUCT_THUMBNAILS[slug] : null;
+  if (!local) return url || null;
+  if (!url || /^https:\/\/(?:media\.congtc145\.id\.vn|images\.unsplash\.com)\//.test(url)) {
+    return local;
   }
-  return url || null;
+  return url;
 }
 
 function fromApiProduct(product: ApiProduct): ProductDetail {

@@ -15,13 +15,13 @@ export function ProductTile({ product, mode }: ProductTileProps) {
         className="block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-film-warm" 
         aria-label={`Xem chi tiết và từng chiếc máy ${product.name}`}
       >
-        <div className="relative aspect-[16/10] sm:aspect-[4/3] bg-film-dark overflow-hidden">
+        <div className="relative aspect-[16/10] sm:aspect-[4/3] bg-[#f5f2eb] overflow-hidden">
           {product.thumbnailUrl ? (
             <img 
               src={product.thumbnailUrl} 
               alt={`Ảnh minh họa dòng máy ${product.name}`} 
               loading="lazy" 
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" 
+              className="h-full w-full object-contain p-3 transition-transform duration-300 group-hover:scale-[1.02]"
             />
           ) : (
             <div className="flex h-full items-center justify-center text-slate-500">
@@ -93,7 +93,7 @@ export function ProductTile({ product, mode }: ProductTileProps) {
           </div>
 
           <div className="pt-1 flex items-center justify-between text-xs font-medium text-film-warm">
-            <span>Xem tình trạng từng chiếc máy</span>
+            <span>{product.unitsCount > 0 ? 'Xem tình trạng từng chiếc máy' : 'Xem thông tin dòng máy'}</span>
             <span aria-hidden="true">→</span>
           </div>
         </div>

@@ -98,12 +98,12 @@ export function ProductPage() {
 
             return (
               <figure className="overflow-hidden rounded-2xl border border-film-border bg-film-card shadow-sm">
-                <div className="aspect-[4/3] sm:aspect-[16/10] bg-film-dark relative">
+                <div className="aspect-[4/3] sm:aspect-[16/10] bg-[#f5f2eb] relative">
                   {activeImage ? (
                     <img 
                       src={activeImage} 
                       alt={`Ảnh ${currentAngle?.label || 'minh họa'} dòng máy ${product.name}`} 
-                      className="h-full w-full object-cover transition-all duration-300" 
+                      className="h-full w-full object-contain p-3 transition-all duration-300"
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center text-slate-500">
@@ -213,7 +213,9 @@ export function ProductPage() {
               {product.name}
             </h1>
             <p className="mt-2 text-xs text-slate-400 leading-relaxed">
-              Chọn một chiếc máy cụ thể để xem tình trạng ngoại hình, số shot và chuyển tiếp đến trang xem lại.
+              {product.units.length > 0
+                ? 'Chọn một chiếc máy cụ thể để xem tình trạng ngoại hình, số shot và chuyển tiếp đến trang xem lại.'
+                : 'Thông tin từng chiếc máy đang được nhóm cập nhật; hiện có thể xem ảnh và thông số của dòng máy.'}
             </p>
           </div>
 

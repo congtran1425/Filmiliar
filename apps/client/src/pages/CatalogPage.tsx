@@ -36,9 +36,9 @@ export function CatalogPage({ mode }: CatalogPageProps) {
 
   const title = mode === 'RENT' ? 'Thuê máy ảnh' : mode === 'BUY' ? 'Mua máy second-hand' : 'Danh mục thiết bị';
   const subtitle = mode === 'RENT' 
-    ? 'Xem giá thuê theo ngày và chọn chiếc máy còn trong kho.' 
+    ? 'Xem dòng máy và giá thuê tham khảo; tình trạng từng chiếc đang được cập nhật.'
     : mode === 'BUY' 
-    ? 'Tìm máy cũ với giá tham khảo; chi tiết từng chiếc xem trong trang.'
+    ? 'Tìm dòng máy cũ với giá tham khảo; thông tin từng chiếc đang được cập nhật.'
     : 'Khám phá toàn bộ máy ảnh và ống kính đang có trong hệ thống.';
 
   const updateFilter = (key: string, value: string) => {

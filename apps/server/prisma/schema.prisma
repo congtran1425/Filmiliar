@@ -112,6 +112,7 @@ model Product {
   dailyRentalRate    Int          // Giá thuê tham chiếu / ngày (VND)
   referenceUsedPrice BigInt       // Giá tham chiếu máy cũ (VND)
   thumbnailUrl       String?
+  isPublished        Boolean      @default(true)
   
   units              CameraItem[]
   
