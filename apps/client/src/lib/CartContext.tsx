@@ -39,6 +39,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const known = new Set(result.data.map((item) => item.slug));
         setSaved((previous) => previous.slugs.every((slug) => known.has(slug)) ? previous : { ...previous, slugs: previous.slugs.filter((slug) => known.has(slug)) });
       }
+    }).catch(() => { /* Route changes can abort an in-flight refresh. */
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [saved.slugs.join('|')]);
