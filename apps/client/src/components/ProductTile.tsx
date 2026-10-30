@@ -1,6 +1,8 @@
-import { ArrowUpRight, Camera } from 'lucide-react';
+import { ArrowUpRight, Camera, Plus } from 'lucide-react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatVnd, ProductSummary } from '../lib/catalog';
+import { useCart } from '../lib/CartContext';
 
 interface ProductTileProps {
   product: ProductSummary;
@@ -8,6 +10,8 @@ interface ProductTileProps {
 }
 
 export function ProductTile({ product, mode }: ProductTileProps) {
+  const cart = useCart();
+  const [addError, setAddError] = useState<string | null>(null);
   return (
     <article className="group overflow-hidden rounded-2xl border border-film-border bg-film-card transition-all hover:border-film-warm/70 shadow-sm">
       <Link 
@@ -98,6 +102,7 @@ export function ProductTile({ product, mode }: ProductTileProps) {
           </div>
         </div>
       </Link>
+      {mode !== 'BUY' && <div className="border-t border-film-border px-4 py-3 sm:px-5"><button type="button" onClick={() => setAddError(cart.add(product))} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-film-warm/50 text-xs font-bold text-film-warm hover:bg-film-warm/10"><Plus size={16}/> Thêm vào bộ thuê dự kiến</button>{addError && <p role="status" className="mt-2 text-xs text-amber-200">{addError}</p>}</div>}
     </article>
   );
 }

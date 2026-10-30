@@ -1,7 +1,7 @@
-<!-- Hallmark · pre-emit critique: P4 H4 E3 S5 R4 V3 -->
+<!-- Hallmark · pre-emit critique: P4 H4 E3 S5 R4 V3; redesign review: P4 H4 E4 S5 R4 V4 -->
 # Filmiliar design system
 
-This file records the visual direction for the existing website. Extend it as the product flows move to dedicated URLs.
+This file records the visual direction for the website. The home page now has an editorial product-image composition, while the catalog and each product keep dedicated URLs.
 
 ## Direction
 
@@ -42,7 +42,7 @@ Teal is the main action color. Warm accent is secondary; it must not compete wit
 
 ## Current implementation and pending work
 
-- Product URLs and rental/purchase review pages are implemented. The review pages do not create orders or charge money.
+- Product URLs, rental/purchase review pages, a unified catalog, and a local rental-plan drawer are implemented. The review pages and drawer do not create orders or charge money.
 - A gallery of photographs of the exact physical unit is pending. Existing seed thumbnails are illustrative, and known unrelated images are suppressed in the client.
 - The final payment integration remains outside the current UI/UX phase.
 - Deposit and warranty terms require group decisions before policy UI or amounts are finalized.

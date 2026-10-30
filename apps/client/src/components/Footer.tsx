@@ -26,6 +26,7 @@ export const Footer: React.FC<FooterProps> = ({ onOpenInfo, onOpenQuiz, onScroll
             <p className="text-slate-400 text-xs leading-relaxed">
               Khám phá máy ảnh second-hand để thuê hoặc mua. Thông tin về tình trạng thiết bị được hiển thị khi đã có hồ sơ kiểm định.
             </p>
+            <nav aria-label="Đường dẫn chính" className="flex flex-wrap gap-x-3 gap-y-1 text-xs"><Link to="/quy-trinh" className="hover:text-white">Quy trình</Link><Link to="/san-pham" className="hover:text-white">Sản phẩm</Link><Link to="/cam-nang" className="hover:text-white">Cẩm nang</Link><Link to="/lien-he" className="hover:text-white">Liên hệ</Link></nav>
             <p className="text-[11px] text-slate-500 font-mono">
               Dự án môn học của Nhóm 1 · UEH.
             </p>

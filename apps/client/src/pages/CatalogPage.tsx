@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Search, X, Filter, Camera, ShoppingBag, Layers, AlertCircle } from 'lucide-react';
 import { ProductTile } from '../components/ProductTile';
 import { getCatalog, ProductSummary } from '../lib/catalog';
+import { useCart } from '../lib/CartContext';
 
-interface CatalogPageProps {
-  mode: 'RENT' | 'BUY' | 'ALL';
-}
-
-export function CatalogPage({ mode }: CatalogPageProps) {
+export function CatalogPage() {
+  const cart = useCart();
   const [items, setItems] = useState<ProductSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDemo, setIsDemo] = useState(false);
@@ -18,6 +16,13 @@ export function CatalogPage({ mode }: CatalogPageProps) {
 
   const brand = searchParams.get('brand') || 'ALL';
   const query = searchParams.get('q') || '';
+  const category = searchParams.get('category') || 'all';
+  const mode = searchParams.get('mode') === 'buy' ? 'BUY' : searchParams.get('mode') === 'rent' ? 'RENT' : 'ALL';
+  useEffect(() => {
+    const start = searchParams.get('start');
+    const end = searchParams.get('end');
+    if (start && end && end >= start) cart.setDates(start, end);
+  }, [searchParams]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -31,10 +36,11 @@ export function CatalogPage({ mode }: CatalogPageProps) {
   const brands = useMemo(() => ['ALL', ...new Set(items.map((item) => item.brand))], [items]);
   const visible = useMemo(() => items.filter((item) =>
     (brand === 'ALL' || item.brand === brand) &&
+    (category === 'all' || (category === 'lens' ? item.category === 'Lens' : item.category !== 'Lens')) &&
     (!query || `${item.name} ${item.brand} ${item.category}`.toLocaleLowerCase('vi-VN').includes(query.toLocaleLowerCase('vi-VN')))
-  ), [items, brand, query]);
+  ), [items, brand, category, query]);
 
-  const title = mode === 'RENT' ? 'Thuê máy ảnh' : mode === 'BUY' ? 'Mua máy second-hand' : 'Danh mục thiết bị';
+  const title = mode === 'RENT' ? 'Thiết bị cho thuê' : mode === 'BUY' ? 'Máy ảnh & ống kính để mua' : 'Tìm thiết bị của bạn';
   const subtitle = mode === 'RENT' 
     ? 'Xem dòng máy và giá thuê tham khảo; tình trạng từng chiếc đang được cập nhật.'
     : mode === 'BUY' 
@@ -52,7 +58,7 @@ export function CatalogPage({ mode }: CatalogPageProps) {
     setSearchParams(next, { replace: true });
   };
 
-  const hasActiveFilters = brand !== 'ALL' || query.trim() !== '';
+  const hasActiveFilters = brand !== 'ALL' || query.trim() !== '' || category !== 'all';
 
   return (
     <main id="catalog" className="mx-auto w-full max-w-7xl flex-1 space-y-5 px-4 py-6 sm:py-10 sm:px-6 lg:px-8">
@@ -74,8 +80,7 @@ export function CatalogPage({ mode }: CatalogPageProps) {
 
         {/* Mode Switcher Tabs */}
         <nav aria-label="Chế độ danh mục" className="flex items-center gap-1.5 rounded-xl bg-film-card p-1 border border-film-border self-start md:self-auto">
-          <Link 
-            to="/thue" 
+          <button type="button" onClick={() => updateFilter('mode', 'rent')} aria-pressed={mode === 'RENT'}
             className={`min-h-[40px] px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
               mode === 'RENT' 
                 ? 'bg-film-warm text-film-dark shadow-sm' 
@@ -84,9 +89,8 @@ export function CatalogPage({ mode }: CatalogPageProps) {
           >
             <Camera className="w-3.5 h-3.5" />
             <span>Thuê máy</span>
-          </Link>
-          <Link 
-            to="/mua" 
+          </button>
+          <button type="button" onClick={() => updateFilter('mode', 'buy')} aria-pressed={mode === 'BUY'}
             className={`min-h-[40px] px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
               mode === 'BUY' 
                 ? 'bg-film-warm text-film-dark shadow-sm' 
@@ -95,10 +99,9 @@ export function CatalogPage({ mode }: CatalogPageProps) {
           >
             <ShoppingBag className="w-3.5 h-3.5" />
             <span>Mua máy</span>
-          </Link>
-          <Link 
-            to="/" 
-            className={`min-h-[40px] px-3 py-1.5 rounded-lg text-xs font-medium transition-all hidden sm:flex items-center gap-1 ${
+          </button>
+          <button type="button" onClick={() => updateFilter('mode', '')} aria-pressed={mode === 'ALL'}
+            className={`min-h-[40px] px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
               mode === 'ALL' 
                 ? 'bg-film-warm text-film-dark shadow-sm font-bold' 
                 : 'text-slate-400 hover:text-white'
@@ -106,7 +109,7 @@ export function CatalogPage({ mode }: CatalogPageProps) {
           >
             <Layers className="w-3.5 h-3.5" />
             <span>Tất cả</span>
-          </Link>
+          </button>
         </nav>
       </div>
 
@@ -119,6 +122,7 @@ export function CatalogPage({ mode }: CatalogPageProps) {
           </div>
         </div>
       )}
+      {(searchParams.get('start') || searchParams.get('end')) && <p className="rounded-xl border border-film-border bg-film-card p-3 text-xs text-slate-300">Ngày đã chọn chỉ để dự tính chi phí. Danh mục chưa lọc theo lịch trống; chọn thiết bị vào bộ dự kiến để xem tổng tiền thuê.</p>}
 
       {/* Search and Filter Controls */}
       <div className="space-y-3">
@@ -147,6 +151,7 @@ export function CatalogPage({ mode }: CatalogPageProps) {
 
           {/* Desktop Brand Select */}
           <div className="hidden sm:flex items-center gap-2">
+            <label className="flex items-center gap-2 text-xs text-slate-300"><span className="font-semibold text-slate-400">Loại:</span><select value={category} onChange={(e) => updateFilter('category', e.target.value)} className="min-h-[44px] rounded-xl border border-film-border bg-film-card px-3 text-xs text-white"><option value="all">Tất cả</option><option value="body">Thân máy</option><option value="lens">Ống kính</option></select></label>
             <label className="flex items-center gap-2 text-xs text-slate-300">
               <span className="font-semibold text-slate-400">Hãng:</span>
               <select 
@@ -170,7 +175,7 @@ export function CatalogPage({ mode }: CatalogPageProps) {
               aria-expanded={showFilterDrawer}
             >
               <Filter className="w-3.5 h-3.5 text-film-warm" />
-              <span>Thương hiệu: {brand === 'ALL' ? 'Tất cả' : brand}</span>
+              <span>Lọc: {brand === 'ALL' ? 'Tất cả hãng' : brand}</span>
             </button>
             {hasActiveFilters && (
               <button
@@ -187,6 +192,8 @@ export function CatalogPage({ mode }: CatalogPageProps) {
         {/* Mobile Horizontal Brand Pills Drawer */}
         {showFilterDrawer && (
           <div className="sm:hidden p-3 rounded-xl bg-film-card border border-film-border space-y-2 animate-fade-in">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Loại thiết bị</div>
+            <div className="flex flex-wrap gap-1.5">{[['all','Tất cả'],['body','Thân máy'],['lens','Ống kính']].map(([value,label]) => <button key={value} type="button" onClick={() => updateFilter('category',value)} aria-pressed={category === value} className={`min-h-[36px] rounded-lg px-3 text-xs ${category === value ? 'bg-film-warm text-film-dark' : 'border border-film-border text-slate-300'}`}>{label}</button>)}</div>
             <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Chọn thương hiệu</div>
             <div className="flex flex-wrap gap-1.5">
               {brands.map((name) => (

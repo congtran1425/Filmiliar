@@ -3,6 +3,7 @@ import { ArrowLeft, Camera, Check, Info, ChevronDown, ChevronUp } from 'lucide-r
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { CameraUnit, formatVnd, PRODUCT_GALLERY } from '../lib/catalog';
 import { useProduct } from '../lib/useProduct';
+import { useCart } from '../lib/CartContext';
 
 const unitStatus: Record<CameraUnit['status'], string> = {
   AVAILABLE: 'Có trong kho (chưa xác nhận lịch)',
@@ -17,6 +18,8 @@ export function ProductPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { product, isDemo, loading, error } = useProduct(slug);
   const [specsOpen, setSpecsOpen] = useState(false);
+  const cart = useCart();
+  const [addError, setAddError] = useState<string | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<{ slug: string; index: number } | null>(null);
 
   if (loading) {
@@ -35,7 +38,7 @@ export function ProductPage() {
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-16">
         <h1 className="text-2xl font-bold text-white">Không tìm thấy thiết bị</h1>
         <p className="mt-2 text-slate-400">{error || 'Đường dẫn này chưa có trong danh mục.'}</p>
-        <Link className="mt-6 inline-flex items-center gap-1.5 text-film-warm underline min-h-[44px]" to="/thue">
+        <Link className="mt-6 inline-flex items-center gap-1.5 text-film-warm underline min-h-[44px]" to="/san-pham">
           <ArrowLeft className="w-4 h-4" /> Về danh mục máy ảnh
         </Link>
       </main>
@@ -55,7 +58,7 @@ export function ProductPage() {
     <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:py-8 sm:px-6 lg:px-8 pb-28 lg:pb-12">
       {/* Breadcrumb Navigation */}
       <nav aria-label="Đường dẫn" className="mb-4 sm:mb-6 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-        <Link to="/thue" className="hover:text-white min-h-[32px] inline-flex items-center">
+        <Link to="/san-pham" className="hover:text-white min-h-[32px] inline-flex items-center">
           <ArrowLeft className="w-3.5 h-3.5 mr-1" /> Danh mục
         </Link>
         <span>/</span>
@@ -377,9 +380,9 @@ export function ProductPage() {
             </div>
           </section>
 
-          <div className="pt-2">
+          <div className="pt-2"><button type="button" onClick={() => setAddError(cart.add(product))} className="mb-2 min-h-11 w-full rounded-xl border border-film-warm px-4 text-sm font-bold text-film-warm hover:bg-film-warm/10">Thêm vào bộ thuê dự kiến</button>{addError && <p role="status" className="mb-2 text-xs text-amber-200">{addError}</p>}
             <Link 
-              to="/thue" 
+              to="/san-pham"
               className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white min-h-[44px]"
             >
               <ArrowLeft className="h-4 w-4" /> Về danh mục máy ảnh

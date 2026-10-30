@@ -18,9 +18,9 @@ const topics = [
   { slug: 'lien-he', label: 'Liên hệ', eyebrow: 'Thông tin nhóm', title: 'Kênh liên hệ Filmiliar', intro: 'Website hiện là bản phát triển cho dự án môn học. Nhóm chưa cung cấp địa chỉ, email, số điện thoại và giờ hoạt động chính thức để công bố.', points: ['Không đến địa chỉ xuất hiện trong tài liệu mẫu cũ vì địa điểm chưa được xác nhận.', 'Kênh liên hệ chính thức sẽ được cập nhật tại đây khi nhóm thống nhất.', 'Hiện website chưa nhận yêu cầu thuê, mua hoặc thanh toán.'] },
 ] as const;
 
-export function SupportPage() {
+export function SupportPage({ topicOverride }: { topicOverride?: string } = {}) {
   const { topic } = useParams();
-  const current = topics.find((item) => item.slug === topic);
+  const current = topics.find((item) => item.slug === (topicOverride || topic));
   if (!current) return <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-16"><h1 className="text-2xl font-bold text-white">Không tìm thấy trang thông tin</h1><Link to="/" className="mt-4 inline-block text-film-warm underline">Về trang chủ</Link></main>;
 
   return (
@@ -32,7 +32,7 @@ export function SupportPage() {
           <h1 className="mt-3 text-3xl font-bold leading-tight text-white sm:text-4xl">{current.title}</h1>
           <p className="mt-5 text-sm leading-7 text-slate-300">{current.intro}</p>
           <ul className="mt-7 space-y-4 border-t border-film-border pt-6 text-sm leading-6 text-slate-300">{current.points.map((point) => <li key={point} className="flex gap-3"><span className="text-film-warm" aria-hidden="true">•</span><span>{point}</span></li>)}</ul>
-          <div className="mt-8 border-t border-film-border pt-6"><Link to="/thue" className="text-sm font-semibold text-film-warm hover:underline">Xem danh mục thiết bị →</Link></div>
+          <div className="mt-8 border-t border-film-border pt-6"><Link to="/san-pham" className="text-sm font-semibold text-film-warm hover:underline">Xem danh mục thiết bị →</Link></div>
         </article>
         <aside><h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Thông tin khác</h2><nav aria-label="Các trang thông tin" className="space-y-1">{topics.map((item) => <Link key={item.slug} to={`/thong-tin/${item.slug}`} aria-current={item.slug === current.slug ? 'page' : undefined} className={`flex items-center min-h-[44px] rounded-lg px-3 py-2 text-sm ${item.slug === current.slug ? 'bg-film-warm/15 font-semibold text-film-warm' : 'text-slate-300 hover:bg-film-card hover:text-white'}`}>{item.label}</Link>)}</nav></aside>
       </div>
