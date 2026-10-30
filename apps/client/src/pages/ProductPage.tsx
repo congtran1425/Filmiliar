@@ -17,7 +17,7 @@ export function ProductPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { product, isDemo, loading, error } = useProduct(slug);
   const [specsOpen, setSpecsOpen] = useState(false);
-  const [selectedAngleIndex, setSelectedAngleIndex] = useState(0);
+  const [selectedPhoto, setSelectedPhoto] = useState<{ slug: string; index: number } | null>(null);
 
   if (loading) {
     return (
@@ -49,6 +49,7 @@ export function ProductPage() {
 
   const reviewPath = (mode: 'thue' | 'mua') => 
     `/thiet-bi/${product.slug}/xem-lai/${mode}?may=${selected?.id}`;
+  const selectedAngleIndex = selectedPhoto?.slug === product.slug ? selectedPhoto.index : 0;
 
   return (
     <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:py-8 sm:px-6 lg:px-8 pb-28 lg:pb-12">
@@ -111,7 +112,7 @@ export function ProductPage() {
                     </div>
                   )}
                   <span className="absolute bottom-3 left-3 rounded-md bg-film-dark/90 px-2.5 py-1 text-[11px] text-slate-300 border border-film-border/60">
-                    {currentAngle ? `Góc: ${currentAngle.label}` : 'Ảnh dòng máy'}
+                    {currentAngle ? `${currentAngle.label} · ${selectedAngleIndex + 1}/${angles.length}` : 'Ảnh dòng máy'}
                   </span>
                 </div>
 
@@ -120,10 +121,11 @@ export function ProductPage() {
                   <div className="flex flex-wrap gap-2 p-3 bg-film-dark/70 border-t border-film-border/60">
                     {angles.map((ang, idx) => (
                       <button
-                        key={idx}
+                        key={ang.url}
                         type="button"
-                        onClick={() => setSelectedAngleIndex(idx)}
-                        className={`min-h-[36px] px-3 py-1 rounded-lg text-xs font-semibold transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-film-warm ${
+                        onClick={() => setSelectedPhoto({ slug: product.slug, index: idx })}
+                        aria-pressed={selectedAngleIndex === idx}
+                        className={`min-h-[44px] px-3 py-1 rounded-lg text-xs font-semibold transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-film-warm ${
                           selectedAngleIndex === idx
                             ? 'bg-film-warm text-film-dark font-bold shadow-sm'
                             : 'bg-film-card text-slate-300 hover:text-white border border-film-border hover:border-slate-500'
@@ -136,7 +138,7 @@ export function ProductPage() {
                 )}
 
                 <figcaption className="p-3.5 text-xs text-slate-400 bg-film-card/80 border-t border-film-border/60 leading-relaxed">
-                  Hình ảnh chụp chi tiết các góc máy. Để xem tình trạng vết xước, số shot và phụ kiện, vui lòng kiểm tra mục thông tin từng chiếc máy bên dưới.
+                  Ảnh minh họa theo dòng sản phẩm. Ống kính và phụ kiện xuất hiện trong ảnh cần được đối chiếu với bộ bàn giao của từng chiếc.
                 </figcaption>
               </figure>
             );
