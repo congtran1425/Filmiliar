@@ -1,0 +1,32 @@
+# Deploy from the monorepo root because the Vercel project root is apps/client.
+# Keep the server workspace manifest for npm workspaces; exclude its code and env.
+.agents/
+.git/
+.vercel/
+.gitignore
+.dockerignore
+.vercelignore
+docs/
+context/
+Mirrorless/
+deploy/
+node_modules/
+server.js
+extracted_content.txt
+HANDOVER_DESKTOP_GUIDE.md
+TIỂU LUẬN CLKDTMĐT - NHÓM 1.docx
+compose.shared-vps.yaml
+README.md
+design.md
+.env*
+*.pem
+*.key
+*.p12
+*.pfx
+*.log
+apps/server/*
+!apps/server/package.json
+apps/client/.env*
+apps/client/.vercel/
+apps/client/node_modules/
+apps/client/dist/
