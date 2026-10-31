@@ -21,6 +21,7 @@ services:
       - no-new-privileges:true
 
   api:
+    image: ${FILMILIAR_API_IMAGE:-filmiliar-api:local}
     build:
       context: .
       dockerfile: apps/server/Dockerfile

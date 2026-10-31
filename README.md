@@ -65,7 +65,9 @@ npm run dev
 
 ## 3. TRIỂN KHAI
 
-Đọc [hướng dẫn VPS và Vercel](docs/deployment_shared_vps.md) trước khi triển khai. Cấu hình Docker Compose dành riêng cho Filmiliar dùng PostgreSQL riêng, API bind vào `127.0.0.1:3081` trên VPS. Cổng `5000` chỉ là cổng nội bộ container; không dùng PM2 hoặc chiếm `80/443`.
+Đọc [hướng dẫn CI/CD và vận hành VPS](deploy/README.md) trước khi triển khai. Cấu hình Docker Compose dành riêng cho Filmiliar dùng PostgreSQL riêng, API bind vào `127.0.0.1:3081` trên VPS. Cổng `5000` chỉ là cổng nội bộ container; không dùng PM2 hoặc chiếm `80/443`.
+
+GitHub Actions kiểm tra mỗi pull request vào `main`. Khi push lên `main`, pipeline build client/server, chạy kiểm thử với PostgreSQL tạm, xuất image API lên GHCR rồi triển khai VPS qua SSH riêng. VPS nhận image theo digest, sao lưu DB trước migration và xác minh commit tại `/api/health`. Frontend tiếp tục deploy qua kết nối Git của Vercel; luồng Vercel hoạt động độc lập với job triển khai VPS.
 
 Website: `https://filmiliar.congtc145.id.vn`. API: `https://api-filmiliar.congtc145.id.vn`. Client Vercel đã đặt `VITE_API_BASE_URL` bằng origin API ở cả Production và Preview. Đây là URL công khai trong bundle, không phải khóa bí mật. Project Vercel đã liên kết GitHub và build từ `apps/client`. Tài liệu nhóm và hướng dẫn iNet riêng được giữ trên máy, không đưa lên GitHub.
 

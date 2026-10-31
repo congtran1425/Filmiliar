@@ -101,6 +101,7 @@ app.get('/api/health', async (req: Request, res: Response) => {
     status: 'ok',
     project: 'Filmiliar API',
     version: '1.0.0',
+    revision: process.env.APP_REVISION || 'development',
     database: {
       status: dbStatus,
       totalProductModels: totalProducts

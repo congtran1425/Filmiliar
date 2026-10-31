@@ -11,7 +11,11 @@ COPY apps/server/src apps/server/src
 RUN npx prisma generate --schema=apps/server/prisma/schema.prisma && npm run build:server
 
 FROM node:22-bookworm-slim
+ARG APP_REVISION=development
 ENV NODE_ENV=production
+ENV APP_REVISION=${APP_REVISION}
+LABEL org.opencontainers.image.source="https://github.com/congtran1425/Filmiliar" \
+      org.opencontainers.image.revision="${APP_REVISION}"
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /app/uploads && chown node:node /app/uploads

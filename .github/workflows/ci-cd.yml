@@ -1,0 +1,149 @@
+name: CI and VPS deployment
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: filmiliar-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Build and test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: filmiliar
+          POSTGRES_PASSWORD: isolated-ci-password
+          POSTGRES_DB: filmiliar_payment_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U filmiliar -d filmiliar_payment_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://filmiliar:isolated-ci-password@127.0.0.1:5432/filmiliar_payment_test?schema=public
+      PAYMENT_TEST_DATABASE_URL: postgresql://filmiliar:isolated-ci-password@127.0.0.1:5432/filmiliar_payment_test?schema=public
+      VITE_API_BASE_URL: https://api-filmiliar.congtc145.id.vn
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate --schema=apps/server/prisma/schema.prisma
+      - name: Apply migrations to disposable CI database
+        run: npx prisma migrate deploy --schema=apps/server/prisma/schema.prisma
+      - run: npm run build
+      - name: Validate deployment shell syntax
+        run: bash -n deploy/ci-deploy.sh deploy/ci-ssh-command.sh deploy/install-ci-access.sh deploy/deploy-shared-vps.sh
+      - name: Unit and database integration tests
+        run: node --test apps/server/tests/*.test.mjs
+
+  publish:
+    name: Publish API image
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.image.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Authenticate to GHCR
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+          GHCR_USER: ${{ github.actor }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+      - name: Build and publish immutable API image
+        id: image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/server/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/congtran1425/filmiliar-api:git-${{ github.sha }}
+          build-args: APP_REVISION=${{ github.sha }}
+          cache-from: type=gha,scope=filmiliar-api
+          cache-to: type=gha,mode=max,scope=filmiliar-api
+      - name: Remove runner registry credentials
+        if: always()
+        run: docker logout ghcr.io
+
+  deploy:
+    name: Deploy Filmiliar VPS
+    needs: publish
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    environment:
+      name: production-vps
+      url: https://api-filmiliar.congtc145.id.vn/api/health
+    steps:
+      - name: Deploy verified image over restricted SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.FILMILIAR_VPS_DEPLOY_KEY }}
+          VPS_HOST: ${{ vars.FILMILIAR_VPS_HOST }}
+          VPS_USER: ${{ vars.FILMILIAR_VPS_USER }}
+          VPS_KNOWN_HOSTS: ${{ vars.FILMILIAR_VPS_KNOWN_HOSTS }}
+          DEPLOY_SHA: ${{ github.sha }}
+          IMAGE_DIGEST: ${{ needs.publish.outputs.digest }}
+          GHCR_TOKEN: ${{ github.token }}
+          GHCR_USER: ${{ github.actor }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$GHCR_USER" =~ ^[a-zA-Z0-9_-]+(\[bot\])?$ ]]
+          test -n "$DEPLOY_KEY" && test -n "$VPS_HOST" && test -n "$VPS_USER"
+          key="$RUNNER_TEMP/filmiliar-deploy-key"
+          hosts="$RUNNER_TEMP/filmiliar-known-hosts"
+          trap 'rm -f "$key" "$hosts"' EXIT
+          umask 077
+          printf '%s\n' "$DEPLOY_KEY" > "$key"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$hosts"
+          printf '%s\n' "$GHCR_TOKEN" | ssh -T -i "$key" \
+            -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$hosts" \
+            "$VPS_USER@$VPS_HOST" "deploy $DEPLOY_SHA $IMAGE_DIGEST $GHCR_USER"
+      - name: Verify public API revision and database health
+        env:
+          EXPECTED_REVISION: ${{ github.sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          const response = await fetch('https://api-filmiliar.congtc145.id.vn/api/health', { signal: AbortSignal.timeout(15000), cache: 'no-store' });
+          const health = await response.json();
+          if (!response.ok || health.revision !== process.env.EXPECTED_REVISION || health.database?.status !== 'connected') throw new Error('Public API did not match the deployed revision');
+          console.log('Verified public API revision:', health.revision);
+          NODE
+      - name: Deployment summary
+        env:
+          DEPLOY_SHA: ${{ github.sha }}
+          IMAGE_DIGEST: ${{ needs.publish.outputs.digest }}
+        run: |
+          printf 'Deployed `%s` to the Filmiliar VPS.\n\nImage: `%s`\n' "$DEPLOY_SHA" "$IMAGE_DIGEST" >> "$GITHUB_STEP_SUMMARY"

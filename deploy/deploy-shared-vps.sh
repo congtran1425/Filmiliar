@@ -10,7 +10,8 @@ test -f "$compose" || { echo "Missing Filmiliar Compose file." >&2; exit 1; }
 docker_compose=(sudo -n docker compose --env-file "$config" -f "$compose" --project-directory "$repo")
 "${docker_compose[@]}" config --quiet
 "${docker_compose[@]}" up -d db
-"${docker_compose[@]}" build api
+revision=$(git -C "$repo" rev-parse HEAD)
+"${docker_compose[@]}" build --build-arg APP_REVISION="$revision" api
 "${docker_compose[@]}" run --rm --no-deps --user root api npx prisma migrate deploy --schema=apps/server/prisma/schema.prisma
 "${docker_compose[@]}" up -d api
 "${docker_compose[@]}" ps
