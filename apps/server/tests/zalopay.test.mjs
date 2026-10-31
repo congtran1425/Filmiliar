@@ -7,6 +7,39 @@ const key1 = 'local-test-key1-at-least-32-characters';
 const key2 = 'local-test-key2-at-least-32-characters';
 const appId = '123456';
 
+test('refund and query refund sign exact forms and preserve large refund IDs', async () => {
+  const requests = [];
+  const gateway = new ZaloPayService({ appId, key1, key2, callbackUrl: 'https://example.test/callback',
+    fetcher: async (url, init) => {
+      requests.push({ url, form: new URLSearchParams(init.body) });
+      return new Response('{"return_code":1,"refund_id":9876543210987654321}');
+    }
+  });
+  const params = { mRefundId: '261031_123456_abcdef', providerTxnId: '98765432109876543', amount: 1000000, description: 'Filmiliar hoan coc', timestamp: 1793408400000 };
+  const created = await gateway.createRefund(params);
+  const queried = await gateway.queryRefund(params.mRefundId);
+  assert.equal(created.refund_id, '9876543210987654321');
+  assert.equal(queried.refund_id, '9876543210987654321');
+  const [create, query] = requests;
+  assert.equal(create.url, 'https://sb-openapi.zalopay.vn/v2/refund');
+  assert.equal(create.form.get('zp_trans_id'), params.providerTxnId);
+  assert.equal(create.form.get('mac'), crypto.createHmac('sha256', key1).update(`${appId}|${params.providerTxnId}|1000000|${params.description}|${params.timestamp}`).digest('hex'));
+  assert.equal(query.url, 'https://sb-openapi.zalopay.vn/v2/query_refund');
+  assert.equal(query.form.get('mac'), crypto.createHmac('sha256', key1).update(`${appId}|${params.mRefundId}|${query.form.get('timestamp')}`).digest('hex'));
+});
+
+test('refund refuses unsafe amounts, HTTP failures and malformed provider responses', async () => {
+  const opts = { appId, key1, key2, callbackUrl: 'https://example.test/callback' };
+  let calls = 0;
+  const params = { mRefundId: '261031_123456_abcdef', providerTxnId: '98765432109876543', amount: -1, description: 'Refund', timestamp: Date.now() };
+  const gateway = new ZaloPayService({ ...opts, fetcher: async () => { calls++; return new Response('', { status: 500 }); } });
+  await assert.rejects(gateway.createRefund(params), /Invalid refund parameters/);
+  assert.equal(calls, 0);
+  await assert.rejects(gateway.createRefund({ ...params, amount: 1000 }), /refund request failed/);
+  const invalid = new ZaloPayService({ ...opts, fetcher: async () => new Response('{"return_code":"1"}') });
+  await assert.rejects(invalid.queryRefund(params.mRefundId), /Invalid ZaloPay refund response/);
+});
+
 test('create signs the exact request and asks for a 15-minute Sandbox VietQR', async () => {
   let request;
   const gateway = new ZaloPayService({ appId, key1, key2, callbackUrl: 'https://example.test/api/payment/callback',

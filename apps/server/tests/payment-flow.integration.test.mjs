@@ -46,7 +46,7 @@ test('Sandbox payment reservation, idempotency and reconciliation on isolated Po
     await assert.rejects(flow.create(second.id, input(units[0])), { statusCode: 409 });
     assert.equal(paidView.totalAmount, 1250000);
     assert.equal(paidView.paymentStatus, 'WAITING');
-    assert.equal((await prisma.cameraItem.findUnique({ where: { id: units[0].id } })).status, 'RESERVED');
+    assert.equal((await prisma.cameraItem.findUnique({ where: { id: units[0].id } })).status, 'AVAILABLE');
     assert.equal((await flow.create(customer.id, request)).bookingId, paidView.bookingId);
     assert.equal(gateway.createCount, 1);
     await assert.rejects(flow.getForUser(second.id, paidView.bookingId), { statusCode: 404 });
@@ -56,7 +56,7 @@ test('Sandbox payment reservation, idempotency and reconciliation on isolated Po
     assert.equal(await flow.handleCallback(paidCallback), true);
     assert.equal((await flow.getForUser(customer.id, paidView.bookingId)).paymentStatus, 'PAID');
     assert.equal((await prisma.rentalBooking.findUnique({ where: { id: paidView.bookingId } })).status, 'CONFIRMED');
-    assert.equal((await prisma.cameraItem.findUnique({ where: { id: units[0].id } })).status, 'RESERVED');
+    assert.equal((await prisma.cameraItem.findUnique({ where: { id: units[0].id } })).status, 'AVAILABLE');
 
     const failed = await flow.create(customer.id, input(units[1]));
     await prisma.paymentAttempt.update({ where: { bookingId: failed.bookingId }, data: { expiresAt: new Date(Date.now() - 3 * 60_000) } });
@@ -84,7 +84,7 @@ test('Sandbox payment reservation, idempotency and reconciliation on isolated Po
     const race = await Promise.allSettled([flow.create(customer.id, input(units[4])), flow.create(second.id, input(units[4]))]);
     assert.equal(race.filter((result) => result.status === 'fulfilled').length, 1);
     assert.equal(race.filter((result) => result.status === 'rejected').length, 1);
-    assert.equal((await prisma.cameraItem.findUnique({ where: { id: units[4].id } })).status, 'RESERVED');
+    assert.equal((await prisma.cameraItem.findUnique({ where: { id: units[4].id } })).status, 'AVAILABLE');
   } finally {
     await prisma.paymentAttempt.deleteMany({ where: { user: { email: { endsWith: `${suffix}@example.test` } } } });
     await prisma.rentalBooking.deleteMany({ where: { user: { email: { endsWith: `${suffix}@example.test` } } } });

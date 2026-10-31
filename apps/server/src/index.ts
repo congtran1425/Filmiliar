@@ -10,7 +10,9 @@ import { z } from 'zod';
 import { uploadService } from './services/upload.service.js';
 import { createSessionToken, getSessionUser, hashPassword, verifyPassword } from './auth.js';
 import { registerPaymentRoutes } from './routes/payment.js';
+import { registerRentalRoutes } from './routes/rental.js';
 import { parseRentalDates, PaymentFlowError } from './services/payment-flow.js';
+import { quoteRental, lockUnit } from './services/rental-availability.js';
 
 dotenv.config();
 
@@ -312,39 +314,13 @@ app.post('/api/quiz/recommend', async (req: Request, res: Response) => {
 // 5. Tính giá thuê và cọc
 app.post('/api/rentals/calculate', async (req: Request, res: Response) => {
   try {
-    const { cameraId, startDate, endDate } = req.body;
-    if (typeof startDate !== 'string' || typeof endDate !== 'string') {
-      return res.status(400).json({ success: false, message: 'Ngày thuê không hợp lệ' });
+    const { cameraItemId, startDate, endDate } = req.body;
+    if (typeof startDate !== 'string' || typeof endDate !== 'string' || !Number.isSafeInteger(cameraItemId) || cameraItemId <= 0) {
+      return res.status(400).json({ success: false, message: 'Cần chọn chiếc máy cụ thể cùng ngày nhận và trả' });
     }
-    const { days: diffDays } = parseRentalDates(startDate, endDate);
-    const numId = parseInt(String(cameraId).replace('prod-', ''));
-    if (!Number.isSafeInteger(numId) || numId <= 0 || !/^(?:prod-)?\d+$/.test(String(cameraId))) {
-      return res.status(400).json({ success: false, message: 'Mã thiết bị không hợp lệ' });
-    }
-
-    const product = await prisma.product.findUnique({
-      where: { id: numId },
-      include: { units: true }
-    });
-
-    if (!product) {
-      return res.status(404).json({ success: false, message: 'Thiết bị không tồn tại' });
-    }
-
-    const totalRentalFee = diffDays * product.dailyRentalRate;
-    res.json({
-      success: true,
-      data: {
-        cameraName: product.modelName,
-        dailyRate: product.dailyRentalRate,
-        totalDays: diffDays,
-        totalRentalFee,
-        depositAmount: null,
-        totalPaymentInitial: null,
-        depositRefundPolicy: null,
-        policyStatus: 'Chính sách đặt cọc và hoàn cọc chưa được nhóm chốt.'
-      }
-    });
+    const quote = await quoteRental(prisma, cameraItemId, startDate, endDate);
+    res.json({ success: true, data: { ...quote.view, cameraName: quote.unit.product.modelName,
+      totalRentalFee: quote.view.rentalFee, totalPaymentInitial: quote.view.totalAmount, depositRefundPolicy: quote.policy.terms } });
   } catch (error: any) {
     if (error instanceof PaymentFlowError) return res.status(error.statusCode).json({ success: false, message: error.message });
     res.status(500).json({ success: false, message: error.message });
@@ -386,8 +362,9 @@ app.post('/api/upload', requireUser, requireAdmin, (req: Request, res: Response,
 // 7. ZALOPAY PAYMENT ENDPOINTS
 // ==========================================
 
-// The Sandbox API is admin-only and remains off unless the host opts in explicitly.
+// Sandbox checkout is available to signed-in customers when the host enables it.
 registerPaymentRoutes(app, prisma, requireUser, requireAdmin);
+registerRentalRoutes(app, prisma, requireUser, requireAdmin);
 
 // ==========================================
 // 8. USER & AUTH ENDPOINTS
@@ -1019,28 +996,27 @@ app.patch('/api/admin/inventory/:serial', requireUser, requireAdmin, async (req:
   }
 
   try {
-    const current = await prisma.cameraItem.findUnique({ where: { serialNumber: req.params.serial } });
-    if (!current) return res.status(404).json({ success: false, message: 'Không tìm thấy thiết bị' });
-    if (parsed.data.status) {
-      if (current.status !== ItemStatus.AVAILABLE && current.status !== ItemStatus.MAINTENANCE) {
-        return res.status(409).json({ success: false, message: 'Máy đang thuộc đơn hoặc trạng thái không thể đổi thủ công' });
+    const initial = await prisma.cameraItem.findUnique({ where: { serialNumber: req.params.serial } });
+    if (!initial) throw new PaymentFlowError('Không tìm thấy thiết bị', 404);
+    const item = await prisma.$transaction(async tx => {
+      await lockUnit(tx, initial.id);
+      const current = await tx.cameraItem.findUniqueOrThrow({ where: { id: initial.id } });
+      if (parsed.data.status) {
+        if (current.status !== ItemStatus.AVAILABLE && current.status !== ItemStatus.MAINTENANCE) throw new PaymentFlowError('Máy đang thuộc lượt thuê; cần xử lý tại đơn thuê', 409);
+        const blockedStatuses: BookingStatus[] = parsed.data.status === ItemStatus.MAINTENANCE
+          ? [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED, BookingStatus.ACTIVE_RENTAL, BookingStatus.RETURNED_PENDING_INSPECTION]
+          : [BookingStatus.ACTIVE_RENTAL, BookingStatus.RETURNED_PENDING_INSPECTION];
+        const [activeRentals, activeOrders] = await Promise.all([
+          tx.rentalBooking.count({ where: { cameraItemId: current.id, status: { in: blockedStatuses } } }),
+          tx.order.count({ where: { cameraItemId: current.id, status: { in: [OrderStatus.PENDING_PAYMENT, OrderStatus.PAID, OrderStatus.DELIVERING] } } })
+        ]);
+        if (activeRentals || activeOrders) throw new PaymentFlowError('Cần xử lý đơn đang mở trước khi thay đổi trạng thái kho', 409);
       }
-      const [activeRentals, activeOrders] = await Promise.all([
-        prisma.rentalBooking.count({ where: { cameraItemId: current.id, status: { in: [BookingStatus.CONFIRMED, BookingStatus.ACTIVE_RENTAL, BookingStatus.RETURNED_PENDING_INSPECTION] } } }),
-        prisma.order.count({ where: { cameraItemId: current.id, status: { in: [OrderStatus.PENDING_PAYMENT, OrderStatus.PAID, OrderStatus.DELIVERING] } } })
-      ]);
-      if (activeRentals || activeOrders) {
-        return res.status(409).json({ success: false, message: 'Máy còn gắn với đơn chưa hoàn tất' });
-      }
-    }
-    const changed = await prisma.cameraItem.updateMany({
-      where: { id: current.id, status: current.status }, data: parsed.data
+      return tx.cameraItem.update({ where: { id: current.id }, data: parsed.data, include: { product: true } });
     });
-    if (changed.count !== 1) return res.status(409).json({ success: false, message: 'Trạng thái máy vừa thay đổi, vui lòng tải lại' });
-    const item = await prisma.cameraItem.findUnique({ where: { id: current.id }, include: { product: true } });
     res.json(serializeData({ success: true, message: 'Cập nhật thiết bị thành công', data: item }));
-  } catch {
-    res.status(404).json({ success: false, message: 'Không tìm thấy thiết bị hoặc không thể cập nhật' });
+  } catch (error) {
+    res.status(error instanceof PaymentFlowError ? error.statusCode : 500).json({ success: false, message: error instanceof PaymentFlowError ? error.message : 'Không thể cập nhật thiết bị' });
   }
 });
 

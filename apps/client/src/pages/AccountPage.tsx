@@ -128,27 +128,27 @@ export function AccountPage() {
       {tab === 'dinh-danh' && <section className="mt-7 max-w-3xl rounded-2xl border border-film-border bg-film-card p-5 sm:p-6">
         <h2 className="text-xl font-bold text-white">Trạng thái định danh</h2>
         <p className="mt-4 inline-block rounded-lg bg-film-warm/15 px-3 py-2 text-sm font-semibold text-film-warm">{kycLabels[user.kycStatus]}</p>
-        <p className="mt-5 text-sm leading-6 text-slate-300">Filmiliar chưa tiếp nhận ảnh CCCD hoặc giấy tờ định danh qua website. Hosting ảnh hiện tại phục vụ tệp công khai; nhóm cần nơi lưu riêng và quy trình duyệt trước khi mở bước này.</p>
+        <p className="mt-5 text-sm leading-6 text-slate-300">Đối chiếu thông tin người nhận trực tiếp khi bàn giao máy.</p>
         <p className="mt-3 text-sm text-slate-400">Trạng thái này không thay đổi giá thuê, tiền cọc hoặc quyền đặt máy.</p>
       </section>}
 
       {tab === 'thue' && <section className="mt-7 space-y-4">
         <h2 className="text-xl font-bold text-white">Đơn thuê đã ghi nhận</h2>
-        <p className="text-sm text-slate-400">Website hiện chưa tạo đơn mới hoặc thu cọc. Dữ liệu bên dưới chỉ xuất hiện nếu đã có bản ghi trong hệ thống.</p>
+        <p className="text-sm text-slate-400">Theo dõi lịch thuê, biên bản bàn giao và tiến trình hoàn cọc.</p>
         {listError ? <p role="alert" className="text-red-300">{listError}</p> : !rentals ? <p role="status" className="text-slate-400">Đang tải...</p> : rentals.length === 0 ? <p className="rounded-xl border border-film-border bg-film-card p-6 text-slate-300">Bạn chưa có đơn thuê nào.</p> : rentals.map((rental) =>
           <article key={rental.id} className="rounded-xl border border-film-border bg-film-card p-5">
             <h3 className="font-semibold text-white">{rental.cameraItem.product.modelName}</h3>
             <p className="mt-1 text-sm text-slate-300">Mã {rental.bookingCode} · chiếc {rental.cameraItem.serialNumber}</p>
-            <p className="mt-2 text-sm text-slate-400">Trạng thái đơn: {rental.status} · Trạng thái cọc trong dữ liệu: {rental.depositStatus}</p>
-            {rental.paymentAttempt && <p className="mt-1 text-sm text-amber-300">Lượt thử ZaloPay Sandbox · {rental.paymentAttempt.status}. Không phải biên lai thanh toán thật.</p>}
+            <p className="mt-2 text-sm text-slate-400">Trạng thái đơn: {rental.status} · Cọc: {rental.depositStatus}</p>
+            {rental.paymentAttempt && <p className="mt-1 text-sm text-amber-300">ZaloPay Sandbox · {rental.paymentAttempt.status}</p>}
             <p className="mt-1 text-sm text-slate-400">Tiền thuê ghi nhận: {money(rental.totalRentalFee)}</p>
-            <Link to={`/thiet-bi/${rental.cameraItem.product.slug}`} className="mt-3 inline-block text-sm font-semibold text-film-warm underline">Xem thiết bị</Link>
+            <div className="mt-3 flex flex-wrap gap-4"><Link to={`/tai-khoan/don-thue/${rental.id}`} className="inline-flex min-h-11 items-center text-sm font-semibold text-film-warm underline">Hồ sơ đơn và hoàn cọc</Link><Link to={`/thiet-bi/${rental.cameraItem.product.slug}`} className="inline-flex min-h-11 items-center text-sm text-slate-300 underline">Xem thiết bị</Link></div>
           </article>)}
       </section>}
 
       {tab === 'mua' && <section className="mt-7 space-y-4">
         <h2 className="text-xl font-bold text-white">Đơn mua đã ghi nhận</h2>
-        <p className="text-sm text-slate-400">Chưa mở mua và thanh toán trực tuyến; bảo hành chưa có quy tắc được nhóm duyệt.</p>
+        <p className="text-sm text-slate-400">Lịch sử mua máy và hồ sơ của từng chiếc.</p>
         {listError ? <p role="alert" className="text-red-300">{listError}</p> : !orders ? <p role="status" className="text-slate-400">Đang tải...</p> : orders.length === 0 ? <p className="rounded-xl border border-film-border bg-film-card p-6 text-slate-300">Bạn chưa có đơn mua nào.</p> : orders.map((order) =>
           <article key={order.id} className="rounded-xl border border-film-border bg-film-card p-5">
             <h3 className="font-semibold text-white">{order.cameraItem.product.modelName}</h3>

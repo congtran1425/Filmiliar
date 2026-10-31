@@ -5,44 +5,26 @@ import {
 } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 import type { ZaloPayCallbackData, ZaloPayGateway } from './zalopay.service.js';
+import { PaymentFlowError, parseRentalDates, vietnamDate, isAllocationConflict } from './rental-domain.js';
+import { lockBooking, lockUnit, quoteRental, refreshUnitStatus } from './rental-availability.js';
+export { PaymentFlowError, parseRentalDates } from './rental-domain.js';
 
 const ATTEMPT_LIFETIME_MS = 15 * 60 * 1000;
 const FINAL_QUERY_GRACE_MS = 2 * 60 * 1000;
 const QUERY_THROTTLE_MS = 6 * 1000;
-const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 const attemptInclude = {
   booking: { include: { cameraItem: { include: { product: true } } } }
 } satisfies Prisma.PaymentAttemptInclude;
 type AttemptViewSource = Prisma.PaymentAttemptGetPayload<{ include: typeof attemptInclude }>;
 
-export class PaymentFlowError extends Error {
-  constructor(message: string, public readonly statusCode = 400) { super(message); }
-}
-
 export interface CreateRentalPaymentInput {
   cameraItemId: number;
   startDate: string;
   endDate: string;
   clientRequestId: string;
-}
-
-function vietnamDate(date = new Date()): string {
-  return new Date(date.getTime() + VN_OFFSET_MS).toISOString().slice(0, 10);
-}
-
-export function parseRentalDates(startDate: string, endDate: string) {
-  const start = new Date(`${startDate}T00:00:00.000Z`);
-  const end = new Date(`${endDate}T00:00:00.000Z`);
-  const days = Math.round((end.getTime() - start.getTime()) / 86400000);
-  const today = new Date(`${vietnamDate()}T00:00:00.000Z`);
-  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) ||
-      start.toISOString().slice(0, 10) !== startDate || end.toISOString().slice(0, 10) !== endDate ||
-      start.getTime() < today.getTime() || start.getTime() > today.getTime() + 90 * 86400000 ||
-      days < 1 || days > 30) {
-    throw new PaymentFlowError('Ngày thuê cần hợp lệ, bắt đầu trong 90 ngày tới và kéo dài tối đa 30 ngày');
-  }
-  return { start, end, days };
+  quoteHash?: string;
+  termsAccepted?: boolean;
 }
 
 function newAppTransId(): string {
@@ -81,10 +63,12 @@ export class SandboxPaymentFlow {
     return toClientView(attempt);
   }
 
-  async getActiveForUnit(userId: string, cameraItemId: number) {
+  async getActiveForUnit(userId: string, cameraItemId: number, startDate?: string, endDate?: string) {
+    const dates = startDate && endDate ? parseRentalDates(startDate, endDate) : null;
     const attempt = await this.prisma.paymentAttempt.findFirst({
       where: {
-        userId, booking: { cameraItemId },
+        userId, booking: { cameraItemId, status: { notIn: [BookingStatus.COMPLETED, BookingStatus.CANCELLED] },
+          ...(dates ? { startDate: dates.start, endDate: dates.end } : {}) },
         status: { in: [PaymentAttemptStatus.CREATING, PaymentAttemptStatus.WAITING, PaymentAttemptStatus.PAID, PaymentAttemptStatus.REVIEW] }
       }, include: attemptInclude, orderBy: { createdAt: 'desc' }
     });
@@ -113,32 +97,23 @@ export class SandboxPaymentFlow {
     let cameraName: string;
     try {
       const created = await this.prisma.$transaction(async (tx) => {
-        const item = await tx.cameraItem.findUnique({
-          where: { id: input.cameraItemId }, include: { product: true }
-        });
-        if (!item || item.status !== ItemStatus.AVAILABLE) {
-          throw new PaymentFlowError('Chiếc máy này hiện không còn sẵn để thử đặt', 409);
-        }
-        if (item.product.dailyRentalRate <= 0 || item.depositAmount <= 0) {
-          throw new PaymentFlowError('Chiếc máy chưa có mức giá thử nghiệm hợp lệ', 409);
-        }
-        const fee = days * item.product.dailyRentalRate;
-        const total = fee + item.depositAmount;
-        if (!Number.isSafeInteger(total) || total > 50_000_000) {
-          throw new PaymentFlowError('Giá trị đơn thử nghiệm vượt giới hạn', 400);
-        }
-        const reservation = await tx.cameraItem.updateMany({
-          where: { id: item.id, status: ItemStatus.AVAILABLE },
-          data: { status: ItemStatus.RESERVED }
-        });
-        if (reservation.count !== 1) throw new PaymentFlowError('Chiếc máy vừa được giữ bởi yêu cầu khác', 409);
+        await lockUnit(tx, input.cameraItemId);
+        const quote = await quoteRental(tx, input.cameraItemId, input.startDate, input.endDate);
+        const item = quote.unit;
+        if (!quote.view.available) throw new PaymentFlowError(quote.view.unavailableReason || 'Lịch thuê không còn trống', 409);
+        if (input.quoteHash && input.quoteHash !== quote.view.quoteHash) throw new PaymentFlowError('Giá hoặc chính sách vừa thay đổi. Vui lòng xem lại trước khi thanh toán.', 409);
+        const fee = quote.view.rentalFee;
+        const total = quote.view.totalAmount;
         const booking = await tx.rentalBooking.create({
           data: {
             bookingCode: `BK-SB-${vietnamDate().replace(/-/g, '').slice(2)}-${crypto.randomBytes(5).toString('hex')}`,
             userId, cameraItemId: item.id, startDate: start, endDate: end,
             totalDays: days, dailyRate: item.product.dailyRentalRate, totalRentalFee: fee,
             depositAmount: item.depositAmount, depositStatus: DepositStatus.PENDING,
-            status: BookingStatus.PENDING_PAYMENT, deliveryMethod: 'STORE_PICKUP'
+            status: BookingStatus.PENDING_PAYMENT, deliveryMethod: 'STORE_PICKUP',
+            returnBufferDays: quote.policy.returnBufferDays,
+            termsAcceptedAt: input.termsAccepted ? new Date() : null,
+            policySnapshot: { version: quote.policy.version, terms: quote.policy.terms, cancellationRefund: quote.policy.cancellationRefund, returnBufferDays: quote.policy.returnBufferDays }
           }
         });
         const transId = newAppTransId();
@@ -146,9 +121,11 @@ export class SandboxPaymentFlow {
           data: {
             bookingId: booking.id, userId, clientRequestId: input.clientRequestId,
             appTransId: transId, amount: total,
-            expiresAt: new Date(Date.now() + ATTEMPT_LIFETIME_MS)
+            expiresAt: new Date(Date.now() + ATTEMPT_LIFETIME_MS), merchantAppId: this.gateway.appId
           }
         });
+        await tx.rentalEvent.create({ data: { bookingId: booking.id, actorId: userId, action: 'BOOKED', detail: 'Đã giữ đúng chiếc máy theo khoảng ngày thuê.' } });
+        await refreshUnitStatus(tx, item.id);
         return { attemptId: attempt.id, bookingId: booking.id, appTransId: transId, amount: total, cameraName: item.product.modelName };
       });
       ({ attemptId, bookingId, appTransId, amount, cameraName } = created);
@@ -164,6 +141,7 @@ export class SandboxPaymentFlow {
         }
         return toClientView(raced);
       }
+      if (isAllocationConflict(error)) throw new PaymentFlowError('Chiếc máy vừa có lịch khác trong khoảng ngày này', 409);
       throw error;
     }
 
@@ -177,7 +155,7 @@ export class SandboxPaymentFlow {
           where: { id: attemptId, status: PaymentAttemptStatus.CREATING },
           data: { status: PaymentAttemptStatus.WAITING, qrCode: provider.qr_code || null, orderUrl: provider.order_url || null }
         });
-      } else if (provider.return_code === 2) {
+      } else if (provider.return_code === 2 && [-401, -402].includes(provider.sub_return_code ?? 0)) {
         await this.markFailed(attemptId);
       }
     } catch {
@@ -195,7 +173,11 @@ export class SandboxPaymentFlow {
 
   private async markPaid(attemptId: string, amount: number, providerTxnId?: string) {
     await this.prisma.$transaction(async (tx) => {
-      const attempt = await tx.paymentAttempt.findUnique({ where: { id: attemptId }, include: { booking: true } });
+      let attempt = await tx.paymentAttempt.findUnique({ where: { id: attemptId }, include: { booking: true } });
+      if (!attempt) return;
+      await lockUnit(tx, attempt.booking.cameraItemId);
+      await lockBooking(tx, attempt.bookingId);
+      attempt = await tx.paymentAttempt.findUnique({ where: { id: attemptId }, include: { booking: true } });
       if (!attempt) return;
       if (attempt.status === PaymentAttemptStatus.PAID) {
         if (attempt.amount !== amount || attempt.providerTxnId !== providerTxnId) {
@@ -219,11 +201,11 @@ export class SandboxPaymentFlow {
         data: { status: PaymentAttemptStatus.PAID, providerTxnId }
       });
       if (claimed.count !== 1) return;
-      const reserved = await tx.cameraItem.updateMany({
-        where: { id: attempt.booking.cameraItemId, status: ItemStatus.RESERVED },
-        data: { status: ItemStatus.RESERVED }
-      });
-      if (reserved.count !== 1) {
+      const [allocation, unit] = await Promise.all([
+        tx.rentalAllocation.findUnique({ where: { bookingId: attempt.bookingId } }),
+        tx.cameraItem.findUnique({ where: { id: attempt.booking.cameraItemId } })
+      ]);
+      if (!allocation || allocation.releasedAt || !unit || unit.status === ItemStatus.MAINTENANCE || unit.status === ItemStatus.SOLD) {
         await tx.paymentAttempt.update({ where: { id: attemptId }, data: { status: PaymentAttemptStatus.REVIEW, reviewReason: 'RESERVATION_MISSING' } });
         return;
       }
@@ -231,23 +213,26 @@ export class SandboxPaymentFlow {
         where: { id: attempt.bookingId },
         data: { status: BookingStatus.CONFIRMED, depositStatus: DepositStatus.HELD }
       });
+      await tx.rentalEvent.create({ data: { bookingId: attempt.bookingId, action: 'PAYMENT_CONFIRMED', detail: 'ZaloPay xác nhận thanh toán phí thuê và cọc.' } });
+      await refreshUnitStatus(tx, attempt.booking.cameraItemId);
     });
   }
 
   private async markFailed(attemptId: string) {
     await this.prisma.$transaction(async (tx) => {
-      const attempt = await tx.paymentAttempt.findUnique({ where: { id: attemptId }, include: { booking: true } });
+      let attempt = await tx.paymentAttempt.findUnique({ where: { id: attemptId }, include: { booking: true } });
+      if (!attempt) return;
+      await lockUnit(tx, attempt.booking.cameraItemId);
+      await lockBooking(tx, attempt.bookingId);
+      attempt = await tx.paymentAttempt.findUnique({ where: { id: attemptId }, include: { booking: true } });
       if (!attempt) return;
       const claimed = await tx.paymentAttempt.updateMany({
         where: { id: attemptId, status: { in: [PaymentAttemptStatus.CREATING, PaymentAttemptStatus.WAITING] } },
         data: { status: PaymentAttemptStatus.FAILED }
       });
       if (claimed.count !== 1) return;
-      await tx.cameraItem.updateMany({
-        where: { id: attempt.booking.cameraItemId, status: ItemStatus.RESERVED },
-        data: { status: ItemStatus.AVAILABLE }
-      });
       await tx.rentalBooking.update({ where: { id: attempt.bookingId }, data: { status: BookingStatus.CANCELLED } });
+      await refreshUnitStatus(tx, attempt.booking.cameraItemId);
     });
   }
 
@@ -270,7 +255,7 @@ export class SandboxPaymentFlow {
       } else {
         await this.markPaid(attempt.id, provider.amount, provider.zp_trans_id);
       }
-    } else if (provider.return_code === 2 && Date.now() > attempt.expiresAt.getTime() + FINAL_QUERY_GRACE_MS) {
+    } else if (provider.return_code === 2 && (provider.sub_return_code === undefined || [-54, -63, -101, -217, -332, -333].includes(provider.sub_return_code)) && Date.now() > attempt.expiresAt.getTime() + FINAL_QUERY_GRACE_MS) {
       await this.markFailed(attempt.id);
     } else if (Date.now() > attempt.expiresAt.getTime() + 24 * 60 * 60 * 1000) {
       await this.markReview(attempt.id, 'PROVIDER_RESULT_UNRESOLVED_24H');

@@ -15,8 +15,8 @@ type PaymentView = {
   totalDays: number; rentalFee: number; depositAmount: number; totalAmount: number; sandbox: true;
 };
 
-export function PaymentQrModal({ cameraItemId, startDate, endDate, onClose }: {
-  cameraItemId: number; startDate: string; endDate: string; onClose: () => void;
+export function PaymentQrModal({ cameraItemId, startDate, endDate, quoteHash, termsAccepted, onClose }: {
+  cameraItemId: number; startDate: string; endDate: string; quoteHash: string; termsAccepted: boolean; onClose: () => void;
 }) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -54,7 +54,7 @@ export function PaymentQrModal({ cameraItemId, startDate, endDate, onClose }: {
     const load = async () => {
       setLoading(true); setError('');
       try {
-        const active = await apiRequest<{ data: PaymentView | null }>(`/api/payment/active/${cameraItemId}`);
+        const active = await apiRequest<{ data: PaymentView | null }>(`/api/payment/active/${cameraItemId}?${new URLSearchParams({ startDate, endDate })}`);
         if (cancelled) return;
         if (active.data) { setPayment(active.data); return; }
         const key = `filmiliar:payment:${cameraItemId}:${startDate}:${endDate}`;
@@ -65,16 +65,16 @@ export function PaymentQrModal({ cameraItemId, startDate, endDate, onClose }: {
         }
         const created = await apiRequest<{ data: PaymentView }>('/api/payment/create', {
           method: 'POST',
-          body: JSON.stringify({ cameraItemId, startDate, endDate, clientRequestId })
+          body: JSON.stringify({ cameraItemId, startDate, endDate, clientRequestId, quoteHash, termsAccepted })
         });
         if (!cancelled) setPayment(created.data);
       } catch (cause) {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : 'Không thể tạo mã thử nghiệm');
+        if (!cancelled) setError(cause instanceof Error ? cause.message : 'Không thể tạo mã thanh toán');
       } finally { if (!cancelled) setLoading(false); }
     };
     void load();
     return () => { cancelled = true; };
-  }, [cameraItemId, startDate, endDate]);
+  }, [cameraItemId, startDate, endDate, quoteHash, termsAccepted]);
 
   useEffect(() => {
     if (!payment || (payment.paymentStatus !== 'CREATING' && payment.paymentStatus !== 'WAITING')) return;
@@ -134,30 +134,27 @@ export function PaymentQrModal({ cameraItemId, startDate, endDate, onClose }: {
         <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-film-border bg-film-dark px-4 py-4 sm:px-6">
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-film-warm">Filmiliar · ZaloPay Sandbox</p>
-            <h2 id={titleId} className="mt-1 text-xl font-bold text-white sm:text-2xl">Thử luồng QR thuê thiết bị</h2>
+            <h2 id={titleId} className="mt-1 text-xl font-bold text-white sm:text-2xl">Thanh toán đơn thuê</h2>
           </div>
           <button type="button" onClick={onClose} aria-label="Đóng cửa sổ thanh toán" className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-lg border border-film-border text-slate-200 hover:bg-film-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-film-warm active:scale-95"><X className="h-5 w-5" /></button>
         </header>
 
         <div className="p-4 sm:p-6">
-          <p className="rounded-xl border border-film-warm/40 bg-film-warm/10 p-3 text-sm leading-6 text-film-warm">
-            Chỉ dành cho quản trị viên thử nghiệm. Giá và cọc lấy từ dữ liệu minh họa; đây không phải chính sách đã duyệt và không phải giao dịch tiền thật.
-          </p>
           {error && <p role="alert" className="mt-4 rounded-xl border border-red-400/40 bg-red-400/10 p-3 text-sm text-red-200">{error}</p>}
-          {loading && <p role="status" className="mt-8 text-slate-300">Đang tìm hoặc tạo đúng giao dịch thử nghiệm...</p>}
+          {loading && <p role="status" className="mt-8 text-slate-300">Đang tải giao dịch thanh toán...</p>}
 
           {payment && <div className="mt-6 grid min-w-0 gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             <section className="min-w-0 rounded-xl border border-film-border bg-film-card p-4 sm:p-5" aria-live="polite">
               {payment.paymentStatus === 'PAID' ? <div className="space-y-3 text-center">
                 <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-400" />
-                <h3 className="text-xl font-bold text-white">Sandbox ghi nhận thanh toán</h3>
-                <p className="text-sm leading-6 text-slate-300">Đơn thử đã được xác nhận và chiếc máy được giữ chỗ trong dữ liệu. Máy chưa bàn giao; không có khoản hoàn cọc tự động.</p>
-                <Link to="/tai-khoan?tab=thue" onClick={onClose} className="inline-flex min-h-11 items-center rounded-lg bg-film-warm px-4 font-semibold text-film-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-film-warm">Xem đơn thử</Link>
+                <h3 className="text-xl font-bold text-white">Đã xác nhận thanh toán</h3>
+                <p className="text-sm leading-6 text-slate-300">Lịch thuê đã được giữ. Theo dõi bàn giao và hoàn cọc trong chi tiết đơn.</p>
+                <Link to={`/tai-khoan/don-thue/${payment.bookingId}`} onClick={onClose} className="inline-flex min-h-11 items-center rounded-lg bg-film-warm px-4 font-semibold text-film-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-film-warm">Xem đơn thuê</Link>
               </div> : payment.paymentStatus === 'FAILED' ? <div className="space-y-3 text-center">
                 <ShieldAlert className="mx-auto h-12 w-12 text-slate-300" />
-                <h3 className="text-xl font-bold text-white">Giao dịch thử không thành công</h3>
-                <p className="text-sm text-slate-300">ZaloPay đã trả kết quả không thanh toán. Máy được đưa về trạng thái sẵn trong dữ liệu.</p>
-                <button type="button" onClick={() => { sessionStorage.removeItem(`filmiliar:payment:${cameraItemId}:${startDate}:${endDate}`); window.location.reload(); }} className="min-h-11 rounded-lg border border-film-warm px-4 font-semibold text-film-warm hover:bg-film-warm/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-film-warm">Bắt đầu lượt thử mới</button>
+                <h3 className="text-xl font-bold text-white">Giao dịch không thành công</h3>
+                <p className="text-sm text-slate-300">ZaloPay đã trả kết quả không thanh toán. Khoảng lịch của đơn này đã được giải phóng.</p>
+                <button type="button" onClick={() => { sessionStorage.removeItem(`filmiliar:payment:${cameraItemId}:${startDate}:${endDate}`); window.location.reload(); }} className="min-h-11 rounded-lg border border-film-warm px-4 font-semibold text-film-warm hover:bg-film-warm/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-film-warm">Chọn lại và thanh toán</button>
               </div> : payment.paymentStatus === 'REVIEW' ? <div className="space-y-3 text-center">
                 <ShieldAlert className="mx-auto h-12 w-12 text-amber-300" />
                 <h3 className="text-xl font-bold text-white">Cần đối soát giao dịch</h3>
@@ -167,7 +164,7 @@ export function PaymentQrModal({ cameraItemId, startDate, endDate, onClose }: {
                 <h3 className="text-xl font-bold text-white">Đang kiểm tra mã đã tạo</h3>
                 <p className="text-sm leading-6 text-slate-300">Chưa có QR để quét. Hệ thống đang hỏi ZaloPay về cùng mã giao dịch; không tạo thêm lượt thanh toán.</p>
               </div> : <div className="space-y-4 text-center">
-                <h3 className="text-lg font-bold text-white">Quét mã thử trên ZaloPay Sandbox</h3>
+                <h3 className="text-lg font-bold text-white">Quét mã thanh toán</h3>
                 {secondsLeft > 0 && qrValue ? <>
                   <div className="mx-auto w-fit max-w-full rounded-xl bg-white p-4">
                     <QRCodeSVG id="filmiliar-sandbox-qr" value={qrValue} size={240} level="M" marginSize={1} className="h-auto max-w-full" />
@@ -183,15 +180,15 @@ export function PaymentQrModal({ cameraItemId, startDate, endDate, onClose }: {
             </section>
 
             <section className="min-w-0 space-y-4 rounded-xl border border-film-border bg-film-card p-4 sm:p-5">
-              <h3 className="text-lg font-bold text-white">Chi tiết lượt thử</h3>
-              {!sameDates && <p role="alert" className="rounded-lg border border-amber-400/40 bg-amber-400/10 p-3 text-sm text-amber-200">Chiếc máy này đã có giao dịch thử với ngày thuê khác. Thông tin dưới đây là giao dịch đã lưu.</p>}
+              <h3 className="text-lg font-bold text-white">Chi tiết thanh toán</h3>
+              {!sameDates && <p role="alert" className="rounded-lg border border-amber-400/40 bg-amber-400/10 p-3 text-sm text-amber-200">Thông tin dưới đây là giao dịch đã lưu trước đó.</p>}
               <dl className="space-y-2 text-sm">
                 <div className="flex justify-between gap-3"><dt className="text-slate-400">Thiết bị</dt><dd className="text-right text-white">{payment.cameraName}</dd></div>
                 <div className="flex justify-between gap-3"><dt className="text-slate-400">Số serial</dt><dd className="break-all text-right font-mono text-white">{payment.serialNumber}</dd></div>
-                <div className="flex justify-between gap-3"><dt className="text-slate-400">Ngày thuê thử</dt><dd className="text-right text-white">{payment.startDate} – {payment.endDate}</dd></div>
+                <div className="flex justify-between gap-3"><dt className="text-slate-400">Ngày thuê</dt><dd className="text-right text-white">{payment.startDate} – {payment.endDate}</dd></div>
                 <div className="flex justify-between gap-3"><dt className="text-slate-400">Tiền thuê ({payment.totalDays} ngày)</dt><dd className="text-right text-white">{formatVnd(payment.rentalFee)}</dd></div>
-                <div className="flex justify-between gap-3"><dt className="text-slate-400">Cọc trong dữ liệu mẫu</dt><dd className="text-right text-white">{formatVnd(payment.depositAmount)}</dd></div>
-                <div className="flex justify-between gap-3 border-t border-film-border pt-3 font-bold"><dt className="text-film-warm">Tổng giá trị thử</dt><dd className="text-right text-film-warm">{formatVnd(payment.totalAmount)}</dd></div>
+                <div className="flex justify-between gap-3"><dt className="text-slate-400">Cọc thiết bị</dt><dd className="text-right text-white">{formatVnd(payment.depositAmount)}</dd></div>
+                <div className="flex justify-between gap-3 border-t border-film-border pt-3 font-bold"><dt className="text-film-warm">Tổng thanh toán</dt><dd className="text-right text-film-warm">{formatVnd(payment.totalAmount)}</dd></div>
               </dl>
               <div className="space-y-2 border-t border-film-border pt-4 text-xs text-slate-300">
                 <div className="flex min-w-0 items-center justify-between gap-2"><span className="min-w-0 break-all">Đơn {payment.bookingCode}</span><button type="button" onClick={() => void copy(payment.bookingCode, 'Mã đơn')} aria-label="Sao chép mã đơn" className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-lg border border-film-border hover:bg-film-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-film-warm"><Copy className="h-4 w-4" /></button></div>

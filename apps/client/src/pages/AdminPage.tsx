@@ -4,6 +4,7 @@ import type { FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle, ArrowUpRight, Camera, ClipboardList, Package, Search, ShieldCheck, Users } from 'lucide-react';
 import { apiRequest } from '../lib/session';
+import { RentalAdminPanel } from '../components/RentalAdminPanel';
 
 type Tab = 'tong-quan' | 'don-thue' | 'kho-may' | 'don-mua' | 'nguoi-dung';
 type Stats = {
@@ -179,7 +180,7 @@ export function AdminPage() {
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-film-warm">Filmiliar / Điều hành</p>
           <h1 className="mt-2 break-words text-3xl font-bold text-white sm:text-4xl">Trung tâm quản trị</h1>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">Theo dõi đơn và tài sản theo từng chiếc máy. Thông số kho là dữ liệu đang lưu; khoản cọc, eKYC và bảo hành chưa được xác nhận bằng quy trình thực tế.</p>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">Quản lý từng chiếc máy, lịch thuê, bàn giao, nghiệm thu và tiến trình hoàn tiền.</p>
         </div>
         <div className="flex items-center gap-2 rounded-xl border border-film-warm/40 bg-film-warm/10 px-4 py-3 text-sm text-film-warm">
           <ShieldCheck className="h-5 w-5 shrink-0" /> Chỉ tài khoản quản trị truy cập
@@ -231,30 +232,17 @@ export function AdminPage() {
           <div className="rounded-xl border border-film-border bg-film-card p-5">
             <h3 className="font-bold text-white">Dữ liệu cọc cần đối soát</h3>
             <p className="mt-3 text-sm text-slate-300">Bản ghi cũ HELD: <strong className="text-white">{money(stats.heldDepositAmount)}</strong></p>
-            <p className="mt-2 text-sm text-slate-300">Lượt thử Sandbox HELD: <strong className="text-white">{money(stats.sandboxHeldDepositAmount)}</strong></p>
-            <p className="mt-3 text-xs leading-5 text-amber-300">Trạng thái dữ liệu không chứng minh đã thu hoặc giữ tiền thật.</p>
+            <p className="mt-2 text-sm text-slate-300">Cọc đang giữ · ZaloPay Sandbox: <strong className="text-white">{money(stats.sandboxHeldDepositAmount)}</strong></p>
+
           </div>
         </div>
       </section> : !error && <p role="status" className="mt-7 text-slate-400">Đang tải thống kê...</p>)}
 
-      {tab === 'don-thue' && <section className="mt-7">
-        <h2 className="text-xl font-bold text-white">Hàng đợi đơn thuê</h2>
-        <p className="mt-2 text-sm text-slate-400">Tra cứu theo mã đơn, khách hoặc serial. Bàn giao và hoàn cọc đang chờ quy trình, bằng chứng nhận trả máy và đối soát tiền.</p>
-        {!bookings && !error ? <p role="status" className="mt-5 text-slate-400">Đang tải...</p> : bookings?.length === 0 ? <p className="mt-5 rounded-xl border border-film-border bg-film-card p-6 text-slate-300">Không có đơn thuê phù hợp.</p> : <div className="mt-5 space-y-3">{bookings?.map((booking) =>
-          <article key={booking.id} className="rounded-xl border border-film-border bg-film-card p-5">
-            <div className="flex flex-wrap items-start justify-between gap-2"><h3 className="min-w-0 break-all font-semibold text-white">{booking.bookingCode}</h3><span className="rounded-full border border-film-border px-3 py-1 text-xs text-film-warm">{label(booking.status)}</span></div>
-            <p className="mt-2 text-sm text-slate-200">{booking.cameraItem.product.modelName} · <span className="break-all font-mono">{booking.cameraItem.serialNumber}</span></p>
-            <p className="mt-1 text-sm text-slate-400">{booking.user.fullName} · {booking.user.email}{booking.user.phone ? ` · ${booking.user.phone}` : ''}</p>
-            <p className="mt-2 text-sm text-slate-400">Ngày thuê: {booking.startDate.slice(0, 10)} → {booking.endDate.slice(0, 10)} · Cọc trong dữ liệu: {label(booking.depositStatus)}</p>
-            {booking.paymentAttempt && <p className="mt-2 break-all text-sm text-amber-300">ZaloPay Sandbox · {label(booking.paymentAttempt.status)} · GD {booking.paymentAttempt.appTransId}</p>}
-            {booking.paymentAttempt?.reviewReason && <p className="mt-1 text-sm text-red-300">Cần đối soát: {booking.paymentAttempt.reviewReason}</p>}
-            <div className="mt-4 border-t border-film-border pt-3 text-xs text-slate-400">Bàn giao · Nghiệm thu · Hoàn cọc: chưa mở thao tác</div>
-          </article>)}</div>}
-      </section>}
+      {tab === 'don-thue' && <RentalAdminPanel bookings={bookings} onUpdated={booking => setBookings(items => items?.map(item => item.id === booking.id ? { ...item, status: booking.status, depositStatus: booking.depositStatus, paymentAttempt: booking.paymentAttempt } : item) || null)}/>}
 
       {tab === 'kho-may' && <section className="mt-7">
         <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-bold text-white">Kho máy theo serial</h2>
-        <p className="mt-2 max-w-2xl text-sm text-slate-400">Cập nhật bản ghi theo đúng chiếc máy. Chưa có ngày kiểm tra hoặc ảnh bằng chứng nên thông tin này chưa phải Passport đã xác minh.</p></div>
+        <p className="mt-2 max-w-2xl text-sm text-slate-400">Cập nhật hồ sơ theo từng chiếc máy. Mức cọc và lịch được quản lý ở mục Đơn thuê.</p></div>
           <button type="button" onClick={() => setShowCreate((value) => !value)} aria-expanded={showCreate} className="min-h-11 rounded-lg border border-film-warm px-4 text-sm font-semibold text-film-warm hover:bg-film-warm/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-film-warm">{showCreate ? 'Đóng biểu mẫu' : '+ Thêm chiếc máy'}</button>
         </div>
         {showCreate && <form onSubmit={createItem} className="mt-5 grid gap-3 rounded-xl border border-film-warm/40 bg-film-card p-4 sm:grid-cols-2 sm:p-5">

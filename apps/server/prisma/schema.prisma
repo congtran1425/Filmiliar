@@ -40,8 +40,17 @@ enum BookingStatus {
 enum DepositStatus {
   PENDING
   HELD
+  REFUND_PENDING
   REFUNDED
   DEDUCTED
+}
+
+enum RefundStatus {
+  CREATING
+  PENDING
+  SUCCEEDED
+  FAILED
+  REVIEW
 }
 
 enum PaymentAttemptStatus {
@@ -138,6 +147,7 @@ model CameraItem {
   status             ItemStatus      @default(AVAILABLE) // AVAILABLE, RENTED, MAINTENANCE, SOLD
   
   rentalBookings     RentalBooking[]
+  allocations        RentalAllocation[]
   orderItem          Order?
   
   createdAt          DateTime        @default(now())
@@ -170,6 +180,22 @@ model RentalBooking {
   customerNotes        String?
   returnInspectionNote String?
   paymentAttempt       PaymentAttempt?
+  policySnapshot       Json?
+  returnBufferDays      Int           @default(0)
+  termsAcceptedAt       DateTime?
+  handoverAt            DateTime?
+  handoverRecord        Json?
+  returnedAt            DateTime?
+  inspectedAt           DateTime?
+  returnRecord          Json?
+  deductionAmount       Int           @default(0)
+  deductionReason       String?
+  deductionDecision     String        @default("NONE")
+  deductionAcceptedAt   DateTime?
+  cancellationNote      String?
+  allocation            RentalAllocation?
+  refunds               RefundAttempt[]
+  events                RentalEvent[]
   
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
@@ -194,12 +220,82 @@ model PaymentAttempt {
   reviewReason    String?
   expiresAt       DateTime
   lastQueriedAt   DateTime?
+  merchantAppId   Int?
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
   @@unique([userId, clientRequestId])
   @@index([status, expiresAt])
   @@index([userId, createdAt])
+}
+
+model RentalPolicy {
+  id                   String   @id @default("rental")
+  version              Int      @default(1)
+  returnBufferDays     Int      @default(1)
+  cancellationRefund   String   @default("FULL_PAYMENT")
+  terms                String
+  updatedById          String?
+  updatedAt            DateTime @updatedAt
+}
+
+model RentalAllocation {
+  id             String         @id @default(uuid())
+  cameraItemId   Int
+  cameraItem     CameraItem     @relation(fields: [cameraItemId], references: [id], onDelete: Cascade)
+  bookingId      String?        @unique
+  booking        RentalBooking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  kind           String         @default("BOOKING")
+  startDate      DateTime
+  endDate        DateTime
+  reason         String?
+  actorId        String?
+  releasedAt     DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([cameraItemId, startDate, endDate])
+}
+
+model RefundAttempt {
+  id                 String        @id @default(uuid())
+  bookingId          String
+  booking            RentalBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  activeBookingId    String?       @unique
+  clientRequestId    String
+  mRefundId          String        @unique
+  providerTxnId      String
+  providerRefundId   String?
+  merchantAppId      Int
+  amount             Int
+  purpose            String
+  description        String
+  status             RefundStatus  @default(CREATING)
+  requestedById      String
+  submittedAt        DateTime      @default(now())
+  lastQueriedAt      DateTime?
+  lastReturnCode     Int?
+  lastSubReturnCode  Int?
+  reviewReason       String?
+  confirmedAt        DateTime?
+  updatedAt          DateTime      @updatedAt
+
+  @@unique([bookingId, clientRequestId])
+  @@index([status, lastQueriedAt])
+}
+
+model RentalEvent {
+  id          String        @id @default(uuid())
+  bookingId   String
+  booking     RentalBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  actorId     String?
+  action      String
+  detail      String
+  requestId   String?       @unique
+  payloadHash String?
+  createdAt   DateTime      @default(now())
+
+  @@index([bookingId, createdAt])
 }
 
 model Order {

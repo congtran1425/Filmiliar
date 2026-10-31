@@ -71,8 +71,8 @@ export const Footer: React.FC<FooterProps> = ({ onOpenInfo, onOpenQuiz, onScroll
           <div className="space-y-2.5">
             <h4 className="text-xs font-semibold text-white uppercase tracking-wider">Hỗ trợ & thông tin</h4>
             <div className="space-y-2 text-slate-400">
-              <button 
-                onClick={() => onOpenInfo('CONTACT')} 
+              <button
+                onClick={() => onOpenInfo('CONTACT')}
                 className="flex items-start space-x-2 text-left hover:text-white transition-colors"
               >
                 <span>Liên hệ nhóm Filmiliar</span>
@@ -86,11 +86,11 @@ export const Footer: React.FC<FooterProps> = ({ onOpenInfo, onOpenQuiz, onScroll
 
           {/* Col 4 */}
           <div className="space-y-2.5">
-            <h4 className="text-xs font-semibold text-white uppercase tracking-wider">Trạng thái hiện tại</h4>
+            <h4 className="text-xs font-semibold text-white uppercase tracking-wider">Thuê máy dễ dàng</h4>
             <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 text-[11px] space-y-2 text-slate-300 leading-relaxed">
-              <p>Website đang hoàn thiện trải nghiệm thuê và mua.</p>
-              <p>Chưa thể đặt đơn hoặc thanh toán trên website.</p>
-              <p>Quy tắc đặt cọc và bảo hành đang được nhóm xây dựng.</p>
+              <p>Chọn chiếc máy và kiểm tra lịch thuê.</p>
+              <p>Xem rõ tiền thuê và mức cọc trước khi đặt.</p>
+              <p>Theo dõi bàn giao và hoàn cọc trong tài khoản.</p>
             </div>
           </div>
         </div>

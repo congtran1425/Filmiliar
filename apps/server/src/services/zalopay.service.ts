@@ -11,6 +11,7 @@ export interface ZaloPayCreateParams {
 
 export interface ZaloPayCreateResponse {
   return_code: number;
+  sub_return_code?: number;
   return_message?: string;
   qr_code?: string;
   order_url?: string;
@@ -33,11 +34,28 @@ export interface ZaloPayCallbackData {
   embed_data?: string;
 }
 
+export interface ZaloPayRefundParams {
+  mRefundId: string;
+  providerTxnId: string;
+  amount: number;
+  description: string;
+  timestamp: number;
+}
+
+export interface ZaloPayRefundResponse {
+  return_code: number;
+  sub_return_code?: number;
+  return_message?: string;
+  refund_id?: string;
+}
+
 export interface ZaloPayGateway {
   createPayment(params: ZaloPayCreateParams): Promise<ZaloPayCreateResponse>;
   checkOrderStatus(appTransId: string): Promise<ZaloPayQueryResponse>;
   verifyCallback(data: string, mac: string): boolean;
   parseCallback(data: string): ZaloPayCallbackData;
+  createRefund(params: ZaloPayRefundParams): Promise<ZaloPayRefundResponse>;
+  queryRefund(mRefundId: string): Promise<ZaloPayRefundResponse>;
   appId: number;
 }
 
@@ -49,8 +67,8 @@ type GatewayOptions = {
   fetcher?: typeof fetch;
 };
 
-function exactTransactionId(raw: string): string | undefined {
-  const match = raw.match(/"zp_trans_id"\s*:\s*(?:"(\d+)"|(\d+))/);
+function exactTransactionId(raw: string, field = 'zp_trans_id'): string | undefined {
+  const match = raw.match(new RegExp(`"${field}"\\s*:\\s*(?:"(\\d+)"|(\\d+))(?=\\s*[,}])`));
   return match?.[1] || match?.[2];
 }
 
@@ -115,6 +133,36 @@ export class ZaloPayService implements ZaloPayGateway {
     const result = JSON.parse(raw) as ZaloPayQueryResponse;
     if (typeof result.return_code !== 'number') throw new Error('Invalid ZaloPay query response');
     return { ...result, zp_trans_id: exactTransactionId(raw) };
+  }
+
+  async createRefund(params: ZaloPayRefundParams): Promise<ZaloPayRefundResponse> {
+    this.assertConfigured();
+    if (!Number.isSafeInteger(params.amount) || params.amount <= 0 || !/^\d+$/.test(params.providerTxnId) ||
+        params.mRefundId.length > 45 || params.description.length > 100) throw new Error('Invalid refund parameters');
+    const rawMac = `${this.appId}|${params.providerTxnId}|${params.amount}|${params.description}|${params.timestamp}`;
+    const mac = crypto.createHmac('sha256', this.key1).update(rawMac).digest('hex');
+    const body = new URLSearchParams({ app_id: String(this.appId), m_refund_id: params.mRefundId,
+      zp_trans_id: params.providerTxnId, amount: String(params.amount), description: params.description,
+      timestamp: String(params.timestamp), mac });
+    return this.refundRequest('refund', body);
+  }
+
+  async queryRefund(mRefundId: string): Promise<ZaloPayRefundResponse> {
+    this.assertConfigured();
+    const timestamp = String(Date.now());
+    const mac = crypto.createHmac('sha256', this.key1).update(`${this.appId}|${mRefundId}|${timestamp}`).digest('hex');
+    return this.refundRequest('query_refund', new URLSearchParams({ app_id: String(this.appId), m_refund_id: mRefundId, timestamp, mac }));
+  }
+
+  private async refundRequest(action: 'refund' | 'query_refund', body: URLSearchParams): Promise<ZaloPayRefundResponse> {
+    const response = await this.fetcher(`https://sb-openapi.zalopay.vn/v2/${action}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body, signal: AbortSignal.timeout(10000)
+    });
+    if (!response.ok) throw new Error('ZaloPay refund request failed');
+    const raw = await response.text();
+    const result = JSON.parse(raw) as ZaloPayRefundResponse;
+    if (!Number.isInteger(result.return_code)) throw new Error('Invalid ZaloPay refund response');
+    return { ...result, refund_id: exactTransactionId(raw, 'refund_id') };
   }
 
   verifyCallback(data: string, mac: string): boolean {

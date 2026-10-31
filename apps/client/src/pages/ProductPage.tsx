@@ -4,9 +4,11 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { CameraUnit, formatVnd, PRODUCT_GALLERY } from '../lib/catalog';
 import { useProduct } from '../lib/useProduct';
 import { useCart } from '../lib/CartContext';
+import { useRentalQuote } from '../lib/rental';
+import { RentalSchedule } from '../components/RentalSchedule';
 
 const unitStatus: Record<CameraUnit['status'], string> = {
-  AVAILABLE: 'Có trong kho (chưa xác nhận lịch)',
+  AVAILABLE: 'Có trong kho',
   RESERVED: 'Đang giữ chỗ',
   RENTED: 'Đang cho thuê',
   MAINTENANCE: 'Đang bảo dưỡng',
@@ -16,7 +18,11 @@ const unitStatus: Record<CameraUnit['status'], string> = {
 export function ProductPage() {
   const { slug } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { product, isDemo, loading, error } = useProduct(slug);
+  const { product, loading, error } = useProduct(slug);
+  const selected = product?.units.find(unit => String(unit.id) === searchParams.get('may')) || product?.units.find(unit => unit.status === 'AVAILABLE') || product?.units[0];
+  const [startDate, setStartDate] = useState(searchParams.get('start') || '');
+  const [endDate, setEndDate] = useState(searchParams.get('end') || '');
+  const { quote, loading: checking, error: quoteError } = useRentalQuote(selected?.id, startDate, endDate);
   const [specsOpen, setSpecsOpen] = useState(false);
   const cart = useCart();
   const [addError, setAddError] = useState<string | null>(null);
@@ -45,13 +51,8 @@ export function ProductPage() {
     );
   }
 
-  const selected = 
-    product.units.find((unit) => String(unit.id) === searchParams.get('may')) || 
-    product.units.find((unit) => unit.status === 'AVAILABLE') || 
-    product.units[0];
-
-  const reviewPath = (mode: 'thue' | 'mua') => 
-    `/thiet-bi/${product.slug}/xem-lai/${mode}?may=${selected?.id}`;
+  const reviewPath = (mode: 'thue' | 'mua') =>
+    `/thiet-bi/${product.slug}/xem-lai/${mode}?${new URLSearchParams({ may: String(selected?.id), start: startDate, end: endDate })}`;
   const selectedAngleIndex = selectedPhoto?.slug === product.slug ? selectedPhoto.index : 0;
 
   return (
@@ -67,17 +68,6 @@ export function ProductPage() {
         <span className="text-slate-200 truncate max-w-[200px] sm:max-w-none">{product.name}</span>
       </nav>
 
-      {/* Demo / Verification Notices */}
-      {isDemo && (
-        <div role="status" className="mb-5 rounded-xl border border-film-warm/40 bg-film-warm/10 p-3 text-xs sm:text-sm text-film-warm leading-relaxed">
-          <strong>Dữ liệu minh họa để xem trước UI:</strong> Mã máy, tình trạng và giá chưa được xác nhận; không thể đặt đơn hoặc thanh toán.
-        </div>
-      )}
-      {!isDemo && (
-        <div role="note" className="mb-5 rounded-xl border border-film-border bg-film-card p-3 text-xs sm:text-sm text-slate-300 leading-relaxed">
-          Thiết bị hiện dùng ảnh minh họa của dòng máy, chưa có ảnh chụp vết xước đúng chiếc máy đang chọn. Vui lòng xem thông tin tình trạng như dữ liệu đang rà soát.
-        </div>
-      )}
 
       {/* Mobile Title & Category (first on mobile) */}
       <div className="mb-4 lg:hidden">
@@ -91,7 +81,7 @@ export function ProductPage() {
 
       {/* Two Column Layout on Desktop */}
       <div className="grid grid-cols-1 gap-6 lg:gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-        
+
         {/* Left Column: Photo & Specs */}
         <div className="space-y-5">
           {/* Main Photo Card with Angle Selector */}
@@ -104,9 +94,9 @@ export function ProductPage() {
               <figure className="overflow-hidden rounded-2xl border border-film-border bg-film-card shadow-sm">
                 <div className="aspect-[4/3] sm:aspect-[16/10] bg-[#f5f2eb] relative">
                   {activeImage ? (
-                    <img 
-                      src={activeImage} 
-                      alt={`Ảnh ${currentAngle?.label || 'minh họa'} dòng máy ${product.name}`} 
+                    <img
+                      src={activeImage}
+                      alt={`Ảnh ${currentAngle?.label || 'minh họa'} dòng máy ${product.name}`}
                       className="h-full w-full object-contain p-3 transition-all duration-300"
                     />
                   ) : (
@@ -141,7 +131,7 @@ export function ProductPage() {
                 )}
 
                 <figcaption className="p-3.5 text-xs text-slate-400 bg-film-card/80 border-t border-film-border/60 leading-relaxed">
-                  Ảnh minh họa theo dòng sản phẩm. Ống kính và phụ kiện xuất hiện trong ảnh cần được đối chiếu với bộ bàn giao của từng chiếc.
+                  Bộ ảnh sản phẩm. Phụ kiện đi kèm được ghi trong biên bản bàn giao của chiếc máy bạn chọn.
                 </figcaption>
               </figure>
             );
@@ -155,7 +145,7 @@ export function ProductPage() {
                 <strong className="mt-0.5 block text-base font-extrabold text-film-warm">
                   {formatVnd(product.rentPrice)}
                 </strong>
-                <span className="block text-[10px] text-slate-500 mt-0.5">Giá tham khảo</span>
+                <span className="block text-[10px] text-slate-500 mt-0.5">Chưa gồm cọc thiết bị</span>
               </div>
               <div className="p-3 rounded-xl bg-film-dark/60 border border-film-border/60">
                 <span className="block text-[11px] text-slate-400">Mua tham khảo</span>
@@ -220,7 +210,7 @@ export function ProductPage() {
             <p className="mt-2 text-xs text-slate-400 leading-relaxed">
               {product.units.length > 0
                 ? 'Chọn một chiếc máy cụ thể để xem tình trạng ngoại hình, số shot và chuyển tiếp đến trang xem lại.'
-                : 'Thông tin từng chiếc máy đang được nhóm cập nhật; hiện có thể xem ảnh và thông số của dòng máy.'}
+                : 'Dòng máy hiện hết hàng. Liên hệ Filmiliar để tìm thiết bị phù hợp.'}
             </p>
           </div>
 
@@ -246,7 +236,7 @@ export function ProductPage() {
                     <button
                       key={unit.id}
                       type="button"
-                      onClick={() => setSearchParams({ may: String(unit.id) }, { replace: true })}
+                      onClick={() => setSearchParams(previous => { const next = new URLSearchParams(previous); next.set('may', String(unit.id)); return next; }, { replace: true })}
                       aria-pressed={isCurrent}
                       className={`flex w-full min-h-[52px] items-center justify-between gap-3 rounded-xl border p-3 text-left text-xs sm:text-sm transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-film-warm active:scale-[0.99] ${
                         isCurrent
@@ -334,6 +324,8 @@ export function ProductPage() {
             </section>
           )}
 
+          {selected && <RentalSchedule unitId={selected.id} startDate={startDate} endDate={endDate} onChange={(start, end) => { setStartDate(start); setEndDate(end); }} quote={quote} checking={checking} error={quoteError}/>}
+
           {/* Desktop Pricing & Review Navigation Section */}
           <section className="hidden lg:block rounded-2xl border border-film-border bg-film-card p-5">
             <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400">Chi phí dự kiến</h2>
@@ -353,20 +345,20 @@ export function ProductPage() {
             </div>
 
             <p className="mt-3 text-xs text-slate-400 leading-relaxed">
-              Bước xem lại giúp đối chiếu thông tin trước khi đặt. Hiện website chưa thu tiền trực tuyến.
+              Kiểm tra lịch thuê và mức cọc của chiếc máy trước khi thanh toán.
             </p>
 
             <div className="mt-4 grid grid-cols-2 gap-3">
-              {selected?.status === 'AVAILABLE' ? (
+              {selected && !['SOLD', 'MAINTENANCE'].includes(selected.status) ? (
                 <>
-                  <Link 
-                    to={reviewPath('thue')} 
+                  <Link
+                    to={reviewPath('thue')}
                     className="min-h-[44px] rounded-xl bg-film-warm hover:bg-amber-300 px-4 py-2.5 text-center text-xs font-bold text-film-dark flex items-center justify-center transition-all shadow-sm active:scale-95"
                   >
-                    Xem lại yêu cầu thuê →
+                    Xem lịch và đặt thuê →
                   </Link>
-                  <Link 
-                    to={reviewPath('mua')} 
+                  <Link
+                    to={reviewPath('mua')}
                     className="min-h-[44px] rounded-xl border border-film-warm hover:bg-film-warm/10 px-4 py-2.5 text-center text-xs font-bold text-film-warm flex items-center justify-center transition-all active:scale-95"
                   >
                     Xem lại yêu cầu mua →
@@ -381,7 +373,7 @@ export function ProductPage() {
           </section>
 
           <div className="pt-2"><button type="button" onClick={() => setAddError(cart.add(product))} className="mb-2 min-h-11 w-full rounded-xl border border-film-warm px-4 text-sm font-bold text-film-warm hover:bg-film-warm/10">Thêm vào bộ thuê dự kiến</button>{addError && <p role="status" className="mb-2 text-xs text-amber-200">{addError}</p>}
-            <Link 
+            <Link
               to="/san-pham"
               className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white min-h-[44px]"
             >
@@ -406,7 +398,7 @@ export function ProductPage() {
           </div>
 
           {/* Right actions: Dual Review buttons */}
-          {selected?.status === 'AVAILABLE' ? (
+          {selected && !['SOLD', 'MAINTENANCE'].includes(selected.status) ? (
             <div className="flex items-center gap-2 shrink-0">
               <Link
                 to={reviewPath('thue')}

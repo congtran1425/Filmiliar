@@ -7,24 +7,25 @@ import { useCart } from '../lib/CartContext';
 interface ProductTileProps {
   product: ProductSummary;
   mode: 'RENT' | 'BUY' | 'ALL';
+  dateSearch?: string;
 }
 
-export function ProductTile({ product, mode }: ProductTileProps) {
+export function ProductTile({ product, mode, dateSearch = '' }: ProductTileProps) {
   const cart = useCart();
   const [addError, setAddError] = useState<string | null>(null);
   return (
     <article className="group overflow-hidden rounded-2xl border border-film-border bg-film-card transition-all hover:border-film-warm/70 shadow-sm">
-      <Link 
-        to={`/thiet-bi/${product.slug}`} 
-        className="block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-film-warm" 
+      <Link
+        to={`/thiet-bi/${product.slug}${dateSearch}`}
+        className="block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-film-warm"
         aria-label={`Xem chi tiết và từng chiếc máy ${product.name}`}
       >
         <div className="relative aspect-[16/10] sm:aspect-[4/3] bg-[#f5f2eb] overflow-hidden">
           {product.thumbnailUrl ? (
-            <img 
-              src={product.thumbnailUrl} 
-              alt={`Ảnh minh họa dòng máy ${product.name}`} 
-              loading="lazy" 
+            <img
+              src={product.thumbnailUrl}
+              alt={`Máy ảnh ${product.name}`}
+              loading="lazy"
               className="h-full w-full object-contain p-3 transition-transform duration-300 group-hover:scale-[1.02]"
             />
           ) : (
@@ -33,7 +34,7 @@ export function ProductTile({ product, mode }: ProductTileProps) {
             </div>
           )}
           <span className="absolute bottom-2.5 left-2.5 max-w-[calc(100%-1.25rem)] truncate rounded-md bg-film-dark/90 px-2 py-1 text-[11px] text-slate-300 border border-film-border/60">
-            {product.thumbnailUrl ? 'Ảnh minh họa · chưa xác minh đúng chiếc' : 'Chưa có ảnh phù hợp'}
+            {product.thumbnailUrl ? product.brand : 'Đang cập nhật ảnh'}
           </span>
         </div>
 

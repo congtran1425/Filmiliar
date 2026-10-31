@@ -15,7 +15,7 @@ export function AuthPage({ mode }: { mode: 'LOGIN' | 'REGISTER' }) {
     <main className="mx-auto w-full max-w-lg flex-1 px-4 py-12 sm:py-20">
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-film-warm">Tài khoản Filmiliar</p>
       <h1 className="mt-3 text-3xl font-bold text-white">{mode === 'LOGIN' ? 'Chào mừng trở lại' : 'Tạo tài khoản'}</h1>
-      <p className="mb-7 mt-3 text-sm leading-6 text-slate-300">Quản lý hồ sơ và xem thông tin thiết bị. Filmiliar chưa nhận đơn hoặc thanh toán trực tuyến.</p>
+      <p className="mb-7 mt-3 text-sm leading-6 text-slate-300">Quản lý hồ sơ, đặt lịch thuê và theo dõi hoàn cọc trong tài khoản của bạn.</p>
       <AuthForm initialMode={mode} onSuccess={() => navigate(destination, { replace: true })}
         onModeChange={(nextMode) => navigate(`${nextMode === 'LOGIN' ? '/dang-nhap' : '/dang-ky'}${location.search}`, { replace: true })} />
     </main>

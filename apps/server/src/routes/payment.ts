@@ -9,7 +9,9 @@ const createSchema = z.object({
   cameraItemId: z.number().int().positive(),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  clientRequestId: z.string().uuid()
+  clientRequestId: z.string().uuid(),
+  quoteHash: z.string().regex(/^[a-f0-9]{64}$/),
+  termsAccepted: z.literal(true)
 }).strict();
 const statusSchema = z.object({ bookingId: z.string().uuid() }).strict();
 
@@ -33,17 +35,20 @@ export function registerPaymentRoutes(app: Express, prisma: PrismaClient, requir
   const pollLimit = rateLimit({ windowMs: 60_000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false });
 
   app.get('/api/payment/capabilities', requireUser, (req: Request, res: Response) => {
-    res.json({ success: true, sandboxEnabled: enabled && res.locals.user.role === 'ADMIN' });
+    res.json({ success: true, sandboxEnabled: enabled });
   });
 
-  app.get('/api/payment/active/:unitId', requireUser, requireAdmin, requireSandbox, async (req: Request, res: Response) => {
+  app.get('/api/payment/active/:unitId', requireUser, requireSandbox, async (req: Request, res: Response) => {
     const unitId = Number(req.params.unitId);
     if (!Number.isSafeInteger(unitId) || unitId <= 0) return res.status(400).json({ success: false, message: 'Mã máy không hợp lệ' });
-    try { res.json({ success: true, data: await flow.getActiveForUnit(res.locals.user.id, unitId) }); }
+    const startDate = typeof req.query.startDate === 'string' ? req.query.startDate : undefined;
+    const endDate = typeof req.query.endDate === 'string' ? req.query.endDate : undefined;
+    if (!!startDate !== !!endDate) return res.status(400).json({ success: false, message: 'Cần đủ ngày nhận và ngày trả' });
+    try { res.json({ success: true, data: await flow.getActiveForUnit(res.locals.user.id, unitId, startDate, endDate) }); }
     catch (error) { sendError(error, res); }
   });
 
-  app.post('/api/payment/create', requireUser, requireAdmin, requireSandbox, async (req: Request, res: Response) => {
+  app.post('/api/payment/create', requireUser, requireSandbox, async (req: Request, res: Response) => {
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ success: false, message: 'Thông tin đặt thử không hợp lệ' });
     try {
@@ -52,14 +57,18 @@ export function registerPaymentRoutes(app: Express, prisma: PrismaClient, requir
     } catch (error) { sendError(error, res); }
   });
 
-  app.post('/api/payment/check-status', requireUser, requireAdmin, requireSandbox, pollLimit, async (req: Request, res: Response) => {
+  app.post('/api/payment/check-status', requireUser, pollLimit, async (req: Request, res: Response) => {
     const parsed = statusSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ success: false, message: 'Mã đơn không hợp lệ' });
-    try { res.json({ success: true, data: await flow.reconcileForUser(res.locals.user.id, parsed.data.bookingId) }); }
+    try {
+      let ownerId = res.locals.user.id;
+      if (res.locals.user.role === 'ADMIN') ownerId = (await prisma.rentalBooking.findUnique({ where: { id: parsed.data.bookingId }, select: { userId: true } }))?.userId || ownerId;
+      res.json({ success: true, data: await flow.reconcileForUser(ownerId, parsed.data.bookingId) });
+    }
     catch (error) { sendError(error, res); }
   });
 
-  app.post('/api/payment/callback', requireSandbox, async (req: Request, res: Response) => {
+  app.post('/api/payment/callback', async (req: Request, res: Response) => {
     const data = req.body?.data;
     const mac = req.body?.mac;
     if (typeof data !== 'string' || typeof mac !== 'string' || data.length > 20_000 || !gateway.verifyCallback(data, mac)) {
@@ -73,7 +82,7 @@ export function registerPaymentRoutes(app: Express, prisma: PrismaClient, requir
     }
   });
 
-  if (enabled) {
+  if (gateway.isConfigured()) {
     let reconciling = false;
     const timer = setInterval(async () => {
       if (reconciling) return;
