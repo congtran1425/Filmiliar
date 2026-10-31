@@ -4,6 +4,7 @@ import type { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { PaymentFlowError, SandboxPaymentFlow } from '../services/payment-flow.js';
 import { ZaloPayService } from '../services/zalopay.service.js';
+import { normalizePhone } from '../phone.js';
 
 const createSchema = z.object({
   cameraItemId: z.number().int().positive(),
@@ -52,6 +53,10 @@ export function registerPaymentRoutes(app: Express, prisma: PrismaClient, requir
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ success: false, message: 'Thông tin đặt thử không hợp lệ' });
     try {
+      if (!normalizePhone(res.locals.user.phone)) {
+        const existing = await prisma.paymentAttempt.findUnique({ where: { userId_clientRequestId: { userId: res.locals.user.id, clientRequestId: parsed.data.clientRequestId } }, select: { id: true } });
+        if (!existing) return res.status(409).json({ success: false, message: 'Vui lòng bổ sung số điện thoại hợp lệ trong hồ sơ trước khi đặt thuê.' });
+      }
       const data = await flow.create(res.locals.user.id, parsed.data);
       res.status(data.paymentStatus === 'CREATING' ? 202 : 200).json({ success: true, data });
     } catch (error) { sendError(error, res); }

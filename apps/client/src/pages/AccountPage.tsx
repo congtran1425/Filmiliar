@@ -4,6 +4,8 @@ import type { FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { apiRequest, useSession } from '../lib/session';
 import type { SessionUser } from '../lib/session';
+import { normalizePhone } from '../lib/phone';
+import { PasswordInput } from '../components/PasswordInput';
 
 type Tab = 'ho-so' | 'dinh-danh' | 'thue' | 'mua';
 type Rental = {
@@ -71,8 +73,10 @@ export function AccountPage() {
   const saveProfile = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setMessage('');
     try {
+      const normalizedPhone = normalizePhone(phone);
+      if (!normalizedPhone) throw new Error('Vui lòng nhập số điện thoại hợp lệ, ví dụ 0912345678 hoặc +84 912345678.');
       const result = await apiRequest<{ user: SessionUser }>('/api/user/profile', {
-        method: 'PUT', body: JSON.stringify({ fullName, phone: phone || null, address: address || null })
+        method: 'PUT', body: JSON.stringify({ fullName, phone: normalizedPhone, address: address || null })
       });
       updateUser(result.user);
       setMessage('Đã cập nhật hồ sơ.');
@@ -111,15 +115,16 @@ export function AccountPage() {
         <form onSubmit={saveProfile} className="space-y-4 rounded-2xl border border-film-border bg-film-card p-5 sm:p-6">
           <h2 className="text-xl font-bold text-white">Hồ sơ cá nhân</h2>
           <p className="text-sm text-slate-400">Email đăng nhập: {user.email}</p>
-          <label className="block text-sm text-slate-200">Họ và tên<input className={inputClass} required minLength={2} maxLength={120} autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} /></label>
-          <label className="block text-sm text-slate-200">Số điện thoại<input className={inputClass} type="tel" maxLength={30} autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
-          <label className="block text-sm text-slate-200">Địa chỉ liên hệ<input className={inputClass} maxLength={500} autoComplete="street-address" value={address} onChange={(event) => setAddress(event.target.value)} /></label>
+          <label className="block text-sm text-slate-200">Họ và tên<input className={inputClass} required placeholder="VD: Nguyễn Minh Anh" minLength={2} maxLength={120} autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} /></label>
+          <label className="block text-sm text-slate-200">Số điện thoại<input className={inputClass} required type="tel" inputMode="tel" placeholder="VD: 0912 345 678" maxLength={30} autoComplete="tel" aria-describedby="profile-phone-hint" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+          <p id="profile-phone-hint" className="text-xs leading-5 text-slate-400">Bắt buộc để liên hệ khi nhận máy. Có thể nhập số bắt đầu bằng +84.</p>
+          <label className="block text-sm text-slate-200">Địa chỉ liên hệ (không bắt buộc)<input className={inputClass} placeholder="Số nhà, tên đường, phường/xã, tỉnh/thành" maxLength={500} autoComplete="street-address" value={address} onChange={(event) => setAddress(event.target.value)} /></label>
           <button disabled={busy} className="min-h-11 rounded-lg bg-film-warm px-5 text-sm font-bold text-film-dark disabled:opacity-50">Lưu hồ sơ</button>
         </form>
         <form onSubmit={changePassword} className="space-y-4 rounded-2xl border border-film-border bg-film-card p-5 sm:p-6">
           <h2 className="text-xl font-bold text-white">Đổi mật khẩu</h2>
-          <label className="block text-sm text-slate-200">Mật khẩu hiện tại<input className={inputClass} type="password" required autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></label>
-          <label className="block text-sm text-slate-200">Mật khẩu mới<input className={inputClass} type="password" required minLength={10} maxLength={128} autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label>
+          <div><label htmlFor="current-password" className="block text-sm text-slate-200">Mật khẩu hiện tại</label><PasswordInput id="current-password" label="mật khẩu hiện tại" className={inputClass} placeholder="Nhập mật khẩu đang sử dụng" required autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></div>
+          <div><label htmlFor="new-password" className="block text-sm text-slate-200">Mật khẩu mới</label><PasswordInput id="new-password" label="mật khẩu mới" className={inputClass} placeholder="Tạo mật khẩu mới từ 10 ký tự" required minLength={10} maxLength={128} autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></div>
           <p className="text-xs text-slate-400">Ít nhất 10 ký tự và khác mật khẩu hiện tại.</p>
           <button disabled={busy} className="min-h-11 rounded-lg border border-film-warm px-5 text-sm font-bold text-film-warm disabled:opacity-50">Đổi mật khẩu</button>
         </form>

@@ -43,12 +43,17 @@ test('customer Sandbox checkout validates consent and quote; admin calendar is p
     const input = { cameraItemId: unit.id, startDate: day(10), endDate: day(11), clientRequestId: crypto.randomUUID(), quoteHash: quote.quoteHash };
     assert.equal((await call('/api/payment/create', token, 'POST', input)).status, 400);
     assert.equal((await call('/api/payment/create', token, 'POST', { ...input, termsAccepted: false })).status, 400);
+    assert.equal((await call('/api/payment/create', token, 'POST', { ...input, termsAccepted: true })).status, 409);
+    assert.equal(creates, 0, 'missing contact details do not create or charge an order');
+    await db.user.update({ where: { id: customer.id }, data: { phone: '0912345678' } });
     assert.equal((await call('/api/payment/create', token, 'POST', { ...input, quoteHash: '0'.repeat(64), termsAccepted: true })).status, 409);
     assert.equal(creates, 0);
     const created = await call('/api/payment/create', token, 'POST', { ...input, termsAccepted: true });
     assert.equal(created.status, 200); assert.equal(creates, 1);
     assert.equal((await call('/api/payment/create', token, 'POST', { ...input, termsAccepted: true })).body.data.bookingId, created.body.data.bookingId);
     assert.equal(creates, 1);
+    await db.user.update({ where: { id: customer.id }, data: { phone: null } });
+    assert.equal((await call('/api/payment/create', token, 'POST', { ...input, termsAccepted: true })).body.data.bookingId, created.body.data.bookingId, 'an existing payment remains resumable');
     assert.equal((await call(`/api/rental/bookings/${created.body.data.bookingId}`, otherToken)).status, 404);
     assert.equal((await call(`/api/rental/bookings/${created.body.data.bookingId}`, token)).status, 200);
     const calendar = await call(`/api/rental/calendar/${unit.id}?from=${day(0)}&to=${day(20)}`);

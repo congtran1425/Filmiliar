@@ -11,6 +11,7 @@ import { uploadService } from './services/upload.service.js';
 import { createSessionToken, getSessionUser, hashPassword, verifyPassword } from './auth.js';
 import { registerPaymentRoutes } from './routes/payment.js';
 import { registerRentalRoutes } from './routes/rental.js';
+import { normalizePhone } from './phone.js';
 import { parseRentalDates, PaymentFlowError } from './services/payment-flow.js';
 import { quoteRental, lockUnit } from './services/rental-availability.js';
 
@@ -373,7 +374,9 @@ registerRentalRoutes(app, prisma, requireUser, requireAdmin);
 app.post('/api/auth/register', async (req: Request, res: Response) => {
   try {
     const { email, password, fullName, phone } = req.body;
-    if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || typeof password !== 'string' || password.length < 10 || password.length > 128 || typeof fullName !== 'string' || fullName.trim().length < 2 || fullName.length > 120 || (phone != null && (typeof phone !== 'string' || phone.length > 30))) {
+    const normalizedPhone = normalizePhone(phone);
+    if (!normalizedPhone) return res.status(400).json({ success: false, message: 'Vui lòng nhập số điện thoại hợp lệ, ví dụ 0912345678 hoặc +84 912345678.' });
+    if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || typeof password !== 'string' || password.length < 10 || password.length > 128 || typeof fullName !== 'string' || fullName.trim().length < 2 || fullName.length > 120) {
       return res.status(400).json({ success: false, message: 'Thông tin đăng ký không hợp lệ; mật khẩu cần ít nhất 10 ký tự.' });
     }
 
@@ -388,7 +391,7 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
         email: normalizedEmail,
         passwordHash: hashPassword(password),
         fullName: fullName.trim(),
-        phone: phone?.trim() || null,
+        phone: normalizedPhone,
         role: Role.CUSTOMER,
         kycStatus: KycStatus.UNVERIFIED
       }
@@ -469,7 +472,7 @@ app.get('/api/auth/me', requireUser, (_req: Request, res: Response) => {
 
 const profileSchema = z.object({
   fullName: z.string().trim().min(2).max(120),
-  phone: z.string().trim().max(30).nullable(),
+  phone: z.string().transform(normalizePhone).refine(value => value !== null, 'Vui lòng nhập số điện thoại hợp lệ'),
   address: z.string().trim().max(500).nullable()
 }).strict();
 
@@ -481,7 +484,7 @@ app.put('/api/user/profile', requireUser, async (req: Request, res: Response) =>
       where: { id: res.locals.user.id },
       data: {
         fullName: parsed.data.fullName,
-        phone: parsed.data.phone || null,
+        phone: parsed.data.phone,
         address: parsed.data.address || null
       }
     });

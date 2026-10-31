@@ -7,6 +7,7 @@ import { apiRequest, useSession } from '../lib/session';
 import { useRentalQuote } from '../lib/rental';
 import { PaymentQrModal } from '../components/PaymentQrModal';
 import { RentalSchedule } from '../components/RentalSchedule';
+import { normalizePhone } from '../lib/phone';
 
 type ActivePayment = { bookingId: string; paymentStatus: string };
 export function ReviewPage() {
@@ -49,7 +50,8 @@ export function ReviewPage() {
   if (error || !product || !unit || (mode !== 'thue' && mode !== 'mua')) return <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-12"><h1 className="text-2xl font-bold text-white">Chọn chiếc máy để tiếp tục</h1><p className="mt-3 text-slate-400">{error || 'Mở trang thiết bị và chọn một chiếc máy cụ thể.'}</p><Link to={product ? `/thiet-bi/${product.slug}` : '/san-pham'} className="mt-5 inline-flex min-h-11 items-center text-film-warm underline">Về trang thiết bị</Link></main>;
   const canResume = !!currentPayment && currentPayment.paymentStatus !== 'PAID';
   const accepted = !!quote && acceptedHash === quote.quoteHash;
-  const canCreate = enabled && !!user && !!quote?.available && accepted && !checking;
+  const needsPhone = !!user && !normalizePhone(user.phone || '');
+  const canCreate = enabled && !!user && !needsPhone && !!quote?.available && accepted && !checking;
   const button = 'flex min-h-12 w-full items-center justify-center rounded-xl bg-film-warm px-4 text-center text-sm font-bold text-film-dark disabled:cursor-not-allowed disabled:opacity-40';
   const detailPath = `/thiet-bi/${product.slug}?${new URLSearchParams({ may: String(unit.id), start: startDate, end: endDate })}`;
   return <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
@@ -69,7 +71,7 @@ export function ReviewPage() {
         {mode === 'thue' ? <dl className="space-y-3 text-sm"><div className="flex justify-between gap-3"><dt className="text-slate-400">Giá thuê / ngày</dt><dd className="text-white">{formatVnd(quote?.dailyRate ?? product.rentPrice)}</dd></div><div className="flex justify-between gap-3"><dt className="text-slate-400">Tiền thuê {quote ? `(${quote.totalDays} ngày)` : ''}</dt><dd className="text-white">{quote ? formatVnd(quote.rentalFee) : '—'}</dd></div><div className="flex justify-between gap-3"><dt className="text-slate-400">Cọc thiết bị</dt><dd className="text-white">{formatVnd(quote?.depositAmount ?? unit.depositAmount ?? 0)}</dd></div><div className="flex justify-between gap-3 border-t border-film-border pt-3 font-bold text-film-warm"><dt>Tổng thanh toán</dt><dd>{quote ? formatVnd(quote.totalAmount) : '—'}</dd></div></dl> : <p className="text-xl font-bold text-film-warm">{formatVnd(product.salePrice)}</p>}
         {mode === 'thue' && <>
           <p className="text-xs text-slate-400">ZaloPay Sandbox</p>
-          {currentPayment?.paymentStatus === 'PAID' ? <Link to={`/tai-khoan/don-thue/${currentPayment.bookingId}`} className={button}>Xem đơn đã xác nhận</Link> : user ? <button type="button" disabled={!canResume && !canCreate} onClick={() => setShowPayment({ quoteHash: quote?.quoteHash || '', termsAccepted: accepted })} className={button}>{canResume ? 'Tiếp tục giao dịch đang có' : checking ? 'Đang kiểm tra lịch…' : 'Thanh toán và giữ lịch'}</button> : <Link to={`/dang-nhap?redirect=${encodeURIComponent(location.pathname + location.search)}`} className={button}>Đăng nhập để đặt thuê</Link>}
+          {currentPayment?.paymentStatus === 'PAID' ? <Link to={`/tai-khoan/don-thue/${currentPayment.bookingId}`} className={button}>Xem đơn đã xác nhận</Link> : needsPhone && !canResume ? <><Link to="/tai-khoan?tab=ho-so" className={button}>Bổ sung số điện thoại</Link><p className="text-xs leading-5 text-slate-300">Thêm số liên hệ vào hồ sơ rồi quay lại đặt thuê.</p></> : user ? <button type="button" disabled={!canResume && !canCreate} onClick={() => setShowPayment({ quoteHash: quote?.quoteHash || '', termsAccepted: accepted })} className={button}>{canResume ? 'Tiếp tục giao dịch đang có' : checking ? 'Đang kiểm tra lịch…' : 'Thanh toán và giữ lịch'}</button> : <Link to={`/dang-nhap?redirect=${encodeURIComponent(location.pathname + location.search)}`} className={button}>Đăng nhập để đặt thuê</Link>}
           <p className="text-xs leading-5 text-slate-400">Lịch được giữ khi tạo giao dịch và xác nhận sau khi thanh toán. Tiền cọc được hoàn sau nghiệm thu; khoản khấu trừ cần bạn xác nhận.</p>
         </>}
       </aside>
