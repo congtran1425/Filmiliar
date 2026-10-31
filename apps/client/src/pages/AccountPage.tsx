@@ -5,7 +5,6 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { apiRequest, useSession } from '../lib/session';
 import type { SessionUser } from '../lib/session';
 import { normalizePhone } from '../lib/phone';
-import { PasswordInput } from '../components/PasswordInput';
 
 type Tab = 'ho-so' | 'dinh-danh' | 'thue' | 'mua';
 type Rental = {
@@ -20,7 +19,7 @@ type Order = {
 };
 
 const tabs: { id: Tab; label: string }[] = [
-  { id: 'ho-so', label: 'Hồ sơ & bảo mật' },
+  { id: 'ho-so', label: 'Hồ sơ' },
   { id: 'dinh-danh', label: 'Định danh' },
   { id: 'thue', label: 'Đơn thuê' },
   { id: 'mua', label: 'Đơn mua' }
@@ -34,15 +33,14 @@ const kycLabels: Record<SessionUser['kycStatus'], string> = {
 const money = (value: number) => new Intl.NumberFormat('vi-VN').format(value) + ' đ';
 
 export function AccountPage() {
-  const { user, updateUser, updateToken } = useSession();
+  const { user, updateUser } = useSession();
   const [params, setParams] = useSearchParams();
   const requested = params.get('tab');
   const tab: Tab = tabs.some((item) => item.id === requested) ? requested as Tab : 'ho-so';
   const [fullName, setFullName] = useState(user?.fullName || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [address, setAddress] = useState(user?.address || '');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
+  const [editing, setEditing] = useState(false);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [rentals, setRentals] = useState<Rental[] | null>(null);
@@ -79,21 +77,9 @@ export function AccountPage() {
         method: 'PUT', body: JSON.stringify({ fullName, phone: normalizedPhone, address: address || null })
       });
       updateUser(result.user);
+      setEditing(false);
       setMessage('Đã cập nhật hồ sơ.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Không thể cập nhật'); }
-    finally { setBusy(false); }
-  };
-
-  const changePassword = async (event: FormEvent) => {
-    event.preventDefault(); setBusy(true); setMessage('');
-    try {
-      const result = await apiRequest<{ token: string }>('/api/user/change-password', {
-        method: 'PUT', body: JSON.stringify({ currentPassword, newPassword })
-      });
-      updateToken(result.token);
-      setCurrentPassword(''); setNewPassword('');
-      setMessage('Đã đổi mật khẩu. Các phiên dùng mật khẩu cũ không còn hợp lệ.');
-    } catch (error) { setMessage(error instanceof Error ? error.message : 'Không thể đổi mật khẩu'); }
     finally { setBusy(false); }
   };
 
@@ -105,29 +91,27 @@ export function AccountPage() {
       <h1 className="mt-2 text-3xl font-bold text-white">Tài khoản của bạn</h1>
       <p className="mt-2 text-sm text-slate-300">{user.email} · {user.role === 'ADMIN' ? 'Quản trị viên' : 'Khách hàng'}</p>
       <nav aria-label="Mục tài khoản" className="mt-7 flex gap-2 overflow-x-auto border-b border-film-border pb-3">
-        {tabs.map((item) => <button key={item.id} type="button" onClick={() => { setMessage(''); setParams({ tab: item.id }); }}
+        {tabs.map((item) => <button key={item.id} type="button" onClick={() => { setEditing(false); setMessage(''); setParams({ tab: item.id }); }}
           aria-current={tab === item.id ? 'page' : undefined}
           className={`min-h-11 shrink-0 rounded-lg px-4 text-sm font-semibold ${tab === item.id ? 'bg-film-warm text-film-dark' : 'bg-film-card text-slate-200 hover:text-white'}`}>{item.label}</button>)}
       </nav>
       {message && <p role="status" className="mt-5 rounded-lg border border-film-border bg-film-card p-3 text-sm text-slate-200">{message}</p>}
 
-      {tab === 'ho-so' && <div className="mt-7 grid gap-6 lg:grid-cols-2">
+      {tab === 'ho-so' && <div className="mt-7 max-w-3xl">
+        {!editing ? <section className="rounded-2xl border border-film-border bg-film-card p-5 sm:p-7">
+          <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-bold text-white">Hồ sơ cá nhân</h2><button type="button" onClick={() => { setFullName(user.fullName); setPhone(user.phone || ''); setAddress(user.address || ''); setMessage(''); setEditing(true); }} className="min-h-11 rounded-lg bg-film-warm px-4 text-sm font-bold text-film-dark">Cập nhật thông tin</button></div>
+          <dl className="mt-6 divide-y divide-film-border text-sm">{[['Họ và tên',user.fullName],['Số điện thoại',user.phone || 'Chưa bổ sung'],['Email đăng nhập',user.email],['Địa chỉ liên hệ',user.address || 'Chưa bổ sung']].map(([name,value]) => <div key={name} className="grid gap-2 py-4 sm:grid-cols-[170px_minmax(0,1fr)]"><dt className="text-slate-400">{name}</dt><dd className="break-words text-base text-white">{value}</dd></div>)}</dl>
+        </section> :
         <form onSubmit={saveProfile} className="space-y-4 rounded-2xl border border-film-border bg-film-card p-5 sm:p-6">
-          <h2 className="text-xl font-bold text-white">Hồ sơ cá nhân</h2>
+          <h2 className="text-xl font-bold text-white">Cập nhật thông tin</h2>
           <p className="text-sm text-slate-400">Email đăng nhập: {user.email}</p>
-          <label className="block text-sm text-slate-200">Họ và tên<input className={inputClass} required placeholder="VD: Nguyễn Minh Anh" minLength={2} maxLength={120} autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} /></label>
+          <label className="block text-sm text-slate-200">Họ và tên<input autoFocus className={inputClass} required placeholder="VD: Nguyễn Minh Anh" minLength={2} maxLength={120} autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} /></label>
           <label className="block text-sm text-slate-200">Số điện thoại<input className={inputClass} required type="tel" inputMode="tel" placeholder="VD: 0912 345 678" maxLength={30} autoComplete="tel" aria-describedby="profile-phone-hint" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
           <p id="profile-phone-hint" className="text-xs leading-5 text-slate-400">Bắt buộc để liên hệ khi nhận máy. Có thể nhập số bắt đầu bằng +84.</p>
           <label className="block text-sm text-slate-200">Địa chỉ liên hệ (không bắt buộc)<input className={inputClass} placeholder="Số nhà, tên đường, phường/xã, tỉnh/thành" maxLength={500} autoComplete="street-address" value={address} onChange={(event) => setAddress(event.target.value)} /></label>
-          <button disabled={busy} className="min-h-11 rounded-lg bg-film-warm px-5 text-sm font-bold text-film-dark disabled:opacity-50">Lưu hồ sơ</button>
+          <div className="flex gap-3"><button disabled={busy} className="min-h-11 rounded-lg bg-film-warm px-5 text-sm font-bold text-film-dark disabled:opacity-50">{busy ? 'Đang lưu…' : 'Lưu thay đổi'}</button><button type="button" disabled={busy} onClick={() => { setEditing(false); setMessage(''); setFullName(user.fullName); setPhone(user.phone || ''); setAddress(user.address || ''); }} className="min-h-11 rounded-lg border border-film-border px-5 text-sm font-semibold text-slate-200">Hủy</button></div>
         </form>
-        <form onSubmit={changePassword} className="space-y-4 rounded-2xl border border-film-border bg-film-card p-5 sm:p-6">
-          <h2 className="text-xl font-bold text-white">Đổi mật khẩu</h2>
-          <div><label htmlFor="current-password" className="block text-sm text-slate-200">Mật khẩu hiện tại</label><PasswordInput id="current-password" label="mật khẩu hiện tại" className={inputClass} placeholder="Nhập mật khẩu đang sử dụng" required autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></div>
-          <div><label htmlFor="new-password" className="block text-sm text-slate-200">Mật khẩu mới</label><PasswordInput id="new-password" label="mật khẩu mới" className={inputClass} placeholder="Tạo mật khẩu mới từ 10 ký tự" required minLength={10} maxLength={128} autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></div>
-          <p className="text-xs text-slate-400">Ít nhất 10 ký tự và khác mật khẩu hiện tại.</p>
-          <button disabled={busy} className="min-h-11 rounded-lg border border-film-warm px-5 text-sm font-bold text-film-warm disabled:opacity-50">Đổi mật khẩu</button>
-        </form>
+        }
       </div>}
 
       {tab === 'dinh-danh' && <section className="mt-7 max-w-3xl rounded-2xl border border-film-border bg-film-card p-5 sm:p-6">

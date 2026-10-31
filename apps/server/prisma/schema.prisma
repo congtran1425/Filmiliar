@@ -88,9 +88,24 @@ model User {
   rentals         RentalBooking[]
   paymentAttempts PaymentAttempt[]
   orders          Order[]
+  passwordResets  PasswordResetToken[]
   
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
+}
+
+model PasswordResetToken {
+  id                String    @id @default(uuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash         String    @unique
+  credentialVersion String
+  expiresAt         DateTime
+  usedAt            DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
 }
 
 model Category {

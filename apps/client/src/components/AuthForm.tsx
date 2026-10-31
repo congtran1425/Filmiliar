@@ -5,6 +5,7 @@ import { useSession } from '../lib/session';
 import type { SessionUser } from '../lib/session';
 import { normalizePhone } from '../lib/phone';
 import { PasswordInput } from './PasswordInput';
+import { Link } from 'react-router-dom';
 
 type Mode = 'LOGIN' | 'REGISTER';
 
@@ -82,6 +83,7 @@ export function AuthForm({ initialMode, onSuccess, onModeChange }: { initialMode
             className="mt-1.5 min-h-12 w-full rounded-lg border border-film-border bg-film-dark px-3 text-base text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-film-warm" />
         </div>
         <p id={`${hintId}-password`} className="text-xs leading-5 text-slate-400">{mode === 'REGISTER' ? 'Từ 10 đến 128 ký tự. Nên kết hợp chữ, số và ký hiệu; không dùng số điện thoại làm mật khẩu.' : 'Nhập mật khẩu đã tạo khi đăng ký.'}</p>
+        {mode === 'LOGIN' && <Link to="/quen-mat-khau" className="inline-flex min-h-11 items-center text-sm font-semibold text-film-warm underline">Quên mật khẩu?</Link>}
         <button type="submit" disabled={busy} className="min-h-12 w-full rounded-lg bg-film-warm px-4 text-sm font-bold text-film-dark hover:bg-amber-300 disabled:opacity-60">
           {busy ? 'Đang xử lý...' : mode === 'LOGIN' ? 'Đăng nhập' : 'Tạo tài khoản'}
         </button>

@@ -15,6 +15,8 @@ import { SupportPage, supportPaths } from './pages/SupportPage';
 import { AuthPage } from './pages/AuthPage';
 import { AccountPage } from './pages/AccountPage';
 import { RentalBookingPage } from './pages/RentalBookingPage';
+import { SecurityPage } from './pages/SecurityPage';
+import { PasswordRecoveryPage } from './pages/PasswordRecoveryPage';
 import { useSession } from './lib/session';
 
 const AdminPage = lazy(() => import('./pages/AdminPage').then((module) => ({ default: module.AdminPage })));
@@ -60,7 +62,10 @@ export default function SiteApp() {
         <Route path="/thong-tin/:topic" element={<SupportPage />} />
         <Route path="/dang-nhap" element={<AuthPage mode="LOGIN" />} />
         <Route path="/dang-ky" element={<AuthPage mode="REGISTER" />} />
+        <Route path="/quen-mat-khau" element={<PasswordRecoveryPage key="forgot" />} />
+        <Route path="/dat-lai-mat-khau" element={<PasswordRecoveryPage key="reset" reset />} />
         <Route path="/tai-khoan" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
+        <Route path="/tai-khoan/bao-mat" element={<ProtectedRoute><SecurityPage /></ProtectedRoute>} />
         <Route path="/tai-khoan/don-thue/:id" element={<ProtectedRoute><RentalBookingPage /></ProtectedRoute>} />
         <Route path="/admin" element={<ProtectedRoute admin><Suspense fallback={<main className="mx-auto w-full max-w-7xl flex-1 px-4 py-16 text-slate-300" role="status">Đang mở trung tâm quản trị...</main>}><AdminPage /></Suspense></ProtectedRoute>} />
         <Route path="*" element={<main className="mx-auto w-full max-w-7xl flex-1 px-4 py-20"><p className="text-xs uppercase tracking-wider text-film-warm">404</p><h1 className="mt-2 text-3xl font-bold text-white">Không tìm thấy trang</h1><p className="mt-3 text-slate-400">Đường dẫn này không có trong Filmiliar.</p><Link to="/" className="mt-6 inline-block rounded-lg bg-film-warm px-4 py-2.5 text-sm font-bold text-film-dark">Về trang chủ</Link></main>} />

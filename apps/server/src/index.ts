@@ -12,6 +12,7 @@ import { createSessionToken, getSessionUser, hashPassword, verifyPassword } from
 import { registerPaymentRoutes } from './routes/payment.js';
 import { registerRentalRoutes } from './routes/rental.js';
 import { normalizePhone } from './phone.js';
+import { registerAccountSecurityRoutes } from './routes/account-security.js';
 import { parseRentalDates, PaymentFlowError } from './services/payment-flow.js';
 import { quoteRental, lockUnit } from './services/rental-availability.js';
 
@@ -366,6 +367,7 @@ app.post('/api/upload', requireUser, requireAdmin, (req: Request, res: Response,
 // Sandbox checkout is available to signed-in customers when the host enables it.
 registerPaymentRoutes(app, prisma, requireUser, requireAdmin);
 registerRentalRoutes(app, prisma, requireUser, requireAdmin);
+registerAccountSecurityRoutes(app, prisma, requireUser);
 
 // ==========================================
 // 8. USER & AUTH ENDPOINTS
@@ -491,30 +493,6 @@ app.put('/api/user/profile', requireUser, async (req: Request, res: Response) =>
     res.json({ success: true, user: { id: user.id, email: user.email, fullName: user.fullName, phone: user.phone, address: user.address, role: user.role, kycStatus: user.kycStatus } });
   } catch {
     res.status(500).json({ success: false, message: 'Không thể cập nhật hồ sơ lúc này' });
-  }
-});
-
-app.put('/api/user/change-password', requireUser, async (req: Request, res: Response) => {
-  const parsed = z.object({
-    currentPassword: z.string().min(1).max(128),
-    newPassword: z.string().min(10).max(128)
-  }).strict().safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ success: false, message: 'Mật khẩu mới cần từ 10 đến 128 ký tự' });
-  const { currentPassword, newPassword } = parsed.data;
-  if (!verifyPassword(currentPassword, res.locals.user.passwordHash)) {
-    return res.status(401).json({ success: false, message: 'Mật khẩu hiện tại không đúng' });
-  }
-  if (currentPassword === newPassword) {
-    return res.status(400).json({ success: false, message: 'Mật khẩu mới phải khác mật khẩu hiện tại' });
-  }
-  try {
-    const user = await prisma.user.update({
-      where: { id: res.locals.user.id },
-      data: { passwordHash: hashPassword(newPassword) }
-    });
-    res.json({ success: true, token: createSessionToken(user) });
-  } catch {
-    res.status(500).json({ success: false, message: 'Không thể đổi mật khẩu lúc này' });
   }
 });
 
