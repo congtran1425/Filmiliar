@@ -180,7 +180,7 @@ export function AdminPage() {
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-film-warm">Filmiliar / Điều hành</p>
           <h1 className="mt-2 break-words text-3xl font-bold text-white sm:text-4xl">Trung tâm quản trị</h1>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">Quản lý từng chiếc máy, lịch thuê, bàn giao, nghiệm thu và tiến trình hoàn tiền.</p>
+
         </div>
         <div className="flex items-center gap-2 rounded-xl border border-film-warm/40 bg-film-warm/10 px-4 py-3 text-sm text-film-warm">
           <ShieldCheck className="h-5 w-5 shrink-0" /> Chỉ tài khoản quản trị truy cập
@@ -232,7 +232,7 @@ export function AdminPage() {
           <div className="rounded-xl border border-film-border bg-film-card p-5">
             <h3 className="font-bold text-white">Dữ liệu cọc cần đối soát</h3>
             <p className="mt-3 text-sm text-slate-300">Bản ghi cũ HELD: <strong className="text-white">{money(stats.heldDepositAmount)}</strong></p>
-            <p className="mt-2 text-sm text-slate-300">Cọc đang giữ · ZaloPay Sandbox: <strong className="text-white">{money(stats.sandboxHeldDepositAmount)}</strong></p>
+            <p className="mt-2 text-sm text-slate-300">Cọc đang giữ · ZaloPay: <strong className="text-white">{money(stats.sandboxHeldDepositAmount)}</strong></p>
 
           </div>
         </div>
@@ -242,12 +242,12 @@ export function AdminPage() {
 
       {tab === 'kho-may' && <section className="mt-7">
         <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-bold text-white">Kho máy theo serial</h2>
-        <p className="mt-2 max-w-2xl text-sm text-slate-400">Cập nhật hồ sơ theo từng chiếc máy. Mức cọc và lịch được quản lý ở mục Đơn thuê.</p></div>
+        </div>
           <button type="button" onClick={() => setShowCreate((value) => !value)} aria-expanded={showCreate} className="min-h-11 rounded-lg border border-film-warm px-4 text-sm font-semibold text-film-warm hover:bg-film-warm/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-film-warm">{showCreate ? 'Đóng biểu mẫu' : '+ Thêm chiếc máy'}</button>
         </div>
         {showCreate && <form onSubmit={createItem} className="mt-5 grid gap-3 rounded-xl border border-film-warm/40 bg-film-card p-4 sm:grid-cols-2 sm:p-5">
           <h3 className="text-lg font-bold text-white sm:col-span-2">Thêm chiếc máy vào kho</h3>
-          <p className="text-sm text-slate-400 sm:col-span-2">Máy mới bắt đầu ở trạng thái bảo dưỡng. Cọc được ghi 0 đ cho đến khi nhóm duyệt định mức.</p>
+
           <label className="block text-sm text-slate-200">Dòng máy<select required className={inputClass} value={newItem.modelId} onChange={(event) => setNewItem({ ...newItem, modelId: event.target.value })}><option value="">Chọn dòng máy</option>{models.map((model) => <option key={model.id} value={model.id}>{model.brand} · {model.modelName}</option>)}</select></label>
           <label className="block text-sm text-slate-200">Số serial<input required minLength={3} maxLength={64} className={inputClass} value={newItem.serialNumber} onChange={(event) => setNewItem({ ...newItem, serialNumber: event.target.value })} /></label>
           <label className="block text-sm text-slate-200">Mức ngoại hình<input required maxLength={16} className={inputClass} value={newItem.conditionGrade} onChange={(event) => setNewItem({ ...newItem, conditionGrade: event.target.value })} /></label>
@@ -272,7 +272,7 @@ export function AdminPage() {
             <label className="block text-sm text-slate-200">Cảm biến<input className={inputClass} maxLength={500} value={form.sensorInspection} onChange={(event) => setForm({ ...form, sensorInspection: event.target.value })} /></label>
             <label className="block text-sm text-slate-200">Ống kính / ngàm<input className={inputClass} required maxLength={500} value={form.opticsCondition} onChange={(event) => setForm({ ...form, opticsCondition: event.target.value })} /></label>
             <label className="block text-sm text-slate-200">Ghi chú ngoại hình<input className={inputClass} maxLength={500} value={form.scratchNotes} onChange={(event) => setForm({ ...form, scratchNotes: event.target.value })} /></label>
-            <p className="text-sm text-slate-400">Trạng thái kho: {label(inventory?.find((item) => item.serialNumber === selectedSerial)?.status || '')}. Nút đổi sẵn sàng/bảo dưỡng nằm trên danh sách; trạng thái thuê và bán chỉ thuộc quy trình đơn.</p>
+            <p className="text-sm text-slate-400">Trạng thái kho: {label(inventory?.find((item) => item.serialNumber === selectedSerial)?.status || '')}</p>
             <button disabled={busy} className="min-h-11 rounded-lg bg-film-warm px-5 text-sm font-bold text-film-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-film-warm disabled:opacity-50">{busy ? 'Đang lưu...' : 'Lưu bản ghi'}</button>
           </form> : <p className="text-sm text-slate-400">Chọn một chiếc máy để xem và sửa dữ liệu.</p>}
         </div>}
@@ -280,7 +280,7 @@ export function AdminPage() {
 
       {tab === 'don-mua' && <section className="mt-7">
         <h2 className="text-xl font-bold text-white">Đơn mua máy cũ</h2>
-        <p className="mt-2 text-sm text-slate-400">Xem bản ghi đơn và chiếc máy liên quan. Xác nhận đã thu tiền, đổi máy sang đã bán và kích hoạt bảo hành sẽ mở sau khi nhóm chốt chính sách và luồng thanh toán mua.</p>
+
         {!orders && !error ? <p role="status" className="mt-5 text-slate-400">Đang tải...</p> : orders?.length === 0 ? <p className="mt-5 rounded-xl border border-film-border bg-film-card p-6 text-slate-300">Không có đơn mua phù hợp.</p> : <div className="mt-5 space-y-3">{orders?.map((order) =>
           <article key={order.id} className="rounded-xl border border-film-border bg-film-card p-5">
             <div className="flex flex-wrap items-start justify-between gap-2"><h3 className="min-w-0 break-all font-semibold text-white">{order.orderCode}</h3><span className="rounded-full border border-film-border px-3 py-1 text-xs text-film-warm">{label(order.status)}</span></div>
@@ -293,7 +293,7 @@ export function AdminPage() {
 
       {tab === 'nguoi-dung' && <section className="mt-7">
         <h2 className="text-xl font-bold text-white">Thành viên</h2>
-        <p className="mt-2 text-sm text-slate-400">Tra cứu hồ sơ cơ bản và số đơn. Giấy tờ định danh không hiển thị hoặc được nhận thêm qua hosting ảnh công khai; duyệt eKYC và đổi vai trò đang khóa.</p>
+
         {!users && !error ? <p role="status" className="mt-5 text-slate-400">Đang tải...</p> : users?.length === 0 ? <p className="mt-5 rounded-xl border border-film-border bg-film-card p-6 text-slate-300">Không có thành viên phù hợp.</p> : <div className="mt-5 grid gap-3 md:grid-cols-2">{users?.map((user) =>
           <article key={user.id} className="rounded-xl border border-film-border bg-film-card p-5">
             <h3 className="font-semibold text-white">{user.fullName}</h3>

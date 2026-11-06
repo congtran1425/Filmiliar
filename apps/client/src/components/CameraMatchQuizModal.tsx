@@ -74,7 +74,7 @@ export const CameraMatchQuizModal: React.FC<CameraMatchQuizModalProps> = ({ isOp
             </div>
             <div>
               <h3 id="quiz-modal-title" className="text-sm font-bold text-white">Camera Match Quiz</h3>
-              <p className="text-[11px] text-slate-400">Tư vấn bộ máy và hình thức (thuê/mua) phù hợp</p>
+
             </div>
           </div>
           <button 

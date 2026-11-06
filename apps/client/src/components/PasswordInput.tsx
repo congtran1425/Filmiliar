@@ -6,7 +6,7 @@ export function PasswordInput({ label = 'mật khẩu', className = '', id, ...p
   const generatedId = useId();
   const inputId = id || generatedId;
   const [visible, setVisible] = useState(false);
-  return <span className="relative block">
+  return <span className="relative mt-1.5 block">
     <input {...props} id={inputId} type={visible ? 'text' : 'password'} className={`${className} pr-14`}/>
     <button type="button" aria-label={`${visible ? 'Ẩn' : 'Hiện'} ${label}`} aria-pressed={visible} aria-controls={inputId}
       onMouseDown={event => event.preventDefault()} onClick={() => setVisible(value => !value)}

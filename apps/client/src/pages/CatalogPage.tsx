@@ -106,7 +106,7 @@ export function CatalogPage() {
         </nav>
       </div>
 
-      {(searchParams.get('start') || searchParams.get('end')) && <p className="rounded-xl border border-film-border bg-film-card p-3 text-xs text-slate-300">Lịch đã chọn: {searchParams.get('start')} → {searchParams.get('end')}. Mở thiết bị và chọn một chiếc để kiểm tra lịch trống.</p>}
+      {(searchParams.get('start') || searchParams.get('end')) && <p className="rounded-xl border border-film-border bg-film-card p-3 text-xs text-slate-300">Lịch đã chọn: {searchParams.get('start')} → {searchParams.get('end')}</p>}
 
       {/* Search and Filter Controls */}
       <div className="space-y-3">

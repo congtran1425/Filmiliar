@@ -71,7 +71,6 @@ export function ProductPage() {
         <span className="text-slate-200 truncate max-w-[200px] sm:max-w-none">{product.name}</span>
       </nav>
 
-
       {/* Mobile Title & Category (first on mobile) */}
       <div className="mb-4 lg:hidden">
         <p className="text-xs font-bold uppercase tracking-wider text-film-warm">
@@ -133,9 +132,6 @@ export function ProductPage() {
                   </div>
                 )}
 
-                <figcaption className="p-3.5 text-xs text-slate-400 bg-film-card/80 border-t border-film-border/60 leading-relaxed">
-                  Bộ ảnh sản phẩm. Phụ kiện đi kèm được ghi trong biên bản bàn giao của chiếc máy bạn chọn.
-                </figcaption>
               </figure>
             );
           })()}
@@ -148,14 +144,12 @@ export function ProductPage() {
                 <strong className="mt-0.5 block text-base font-extrabold text-film-warm">
                   {formatVnd(product.rentPrice)}
                 </strong>
-                <span className="block text-[10px] text-slate-500 mt-0.5">Chưa gồm cọc thiết bị</span>
               </div>
               <div className="p-3 rounded-xl bg-film-dark/60 border border-film-border/60">
                 <span className="block text-[11px] text-slate-400">Mua tham khảo</span>
                 <strong className="mt-0.5 block text-base font-extrabold text-white">
                   {formatVnd(product.salePrice)}
                 </strong>
-                <span className="block text-[10px] text-slate-500 mt-0.5">Máy cũ cùng dòng</span>
               </div>
             </div>
           </section>
@@ -170,7 +164,7 @@ export function ProductPage() {
             >
               <div>
                 <h2 className="text-base font-bold text-white">Thông số kỹ thuật dòng máy</h2>
-                <p className="text-xs text-slate-400 lg:hidden">Chạm để {specsOpen ? 'thu gọn' : 'xem chi tiết thông số'}</p>
+
               </div>
               <div className="lg:hidden p-1 text-slate-400">
                 {specsOpen ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
@@ -210,11 +204,7 @@ export function ProductPage() {
             <h1 className="mt-1 min-w-0 text-3xl font-extrabold leading-tight text-white [overflow-wrap:anywhere]">
               {product.name}
             </h1>
-            <p className="mt-2 text-xs text-slate-400 leading-relaxed">
-              {product.units.length > 0
-                ? 'Chọn một chiếc máy cụ thể để xem tình trạng ngoại hình, số shot và chuyển tiếp đến trang xem lại.'
-                : 'Dòng máy hiện hết hàng. Liên hệ Filmiliar để tìm thiết bị phù hợp.'}
-            </p>
+
           </div>
 
           {/* Unit Selector: The Core Mobile Decision Step */}
@@ -227,9 +217,6 @@ export function ProductPage() {
                 </span>
               </h2>
             </div>
-            <p className="mt-1 text-xs text-slate-400">
-              Mỗi chiếc máy cũ có số serial, tình trạng và số shot riêng biệt.
-            </p>
 
             {product.units.length ? (
               <div className="mt-3.5 space-y-2">
@@ -289,9 +276,7 @@ export function ProductPage() {
                   <h2 className="text-sm sm:text-base font-bold text-white">
                     Tình trạng chiếc máy #{selected.serialNumber}
                   </h2>
-                  <p className="mt-0.5 text-[11px] text-slate-400">
-                    Dữ liệu lưu nội bộ · Chưa có ảnh biên bản kiểm định ngày xác nhận
-                  </p>
+
                 </div>
               </div>
 
@@ -347,10 +332,6 @@ export function ProductPage() {
                 </strong>
               </div>
             </div>
-
-            <p className="mt-3 text-xs text-slate-400 leading-relaxed">
-              Kiểm tra lịch thuê và mức cọc của chiếc máy trước khi thanh toán.
-            </p>
 
             <div className="mt-4 grid grid-cols-2 gap-3">
               {selected && !['SOLD', 'MAINTENANCE'].includes(selected.status) ? (

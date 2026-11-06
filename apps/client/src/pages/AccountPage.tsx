@@ -106,8 +106,8 @@ export function AccountPage() {
           <h2 className="text-xl font-bold text-white">Cập nhật thông tin</h2>
           <p className="text-sm text-slate-400">Email đăng nhập: {user.email}</p>
           <label className="block text-sm text-slate-200">Họ và tên<input autoFocus className={inputClass} required placeholder="VD: Nguyễn Minh Anh" minLength={2} maxLength={120} autoComplete="name" value={fullName} onChange={(event) => setFullName(event.target.value)} /></label>
-          <label className="block text-sm text-slate-200">Số điện thoại<input className={inputClass} required type="tel" inputMode="tel" placeholder="VD: 0912 345 678" maxLength={30} autoComplete="tel" aria-describedby="profile-phone-hint" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
-          <p id="profile-phone-hint" className="text-xs leading-5 text-slate-400">Bắt buộc để liên hệ khi nhận máy. Có thể nhập số bắt đầu bằng +84.</p>
+          <label className="block text-sm text-slate-200">Số điện thoại<input className={inputClass} required type="tel" inputMode="tel" placeholder="VD: 0912 345 678" maxLength={30} autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+
           <label className="block text-sm text-slate-200">Địa chỉ liên hệ (không bắt buộc)<input className={inputClass} placeholder="Số nhà, tên đường, phường/xã, tỉnh/thành" maxLength={500} autoComplete="street-address" value={address} onChange={(event) => setAddress(event.target.value)} /></label>
           <div className="flex gap-3"><button disabled={busy} className="min-h-11 rounded-lg bg-film-warm px-5 text-sm font-bold text-film-dark disabled:opacity-50">{busy ? 'Đang lưu…' : 'Lưu thay đổi'}</button><button type="button" disabled={busy} onClick={() => { setEditing(false); setMessage(''); setFullName(user.fullName); setPhone(user.phone || ''); setAddress(user.address || ''); }} className="min-h-11 rounded-lg border border-film-border px-5 text-sm font-semibold text-slate-200">Hủy</button></div>
         </form>
@@ -118,18 +118,18 @@ export function AccountPage() {
         <h2 className="text-xl font-bold text-white">Trạng thái định danh</h2>
         <p className="mt-4 inline-block rounded-lg bg-film-warm/15 px-3 py-2 text-sm font-semibold text-film-warm">{kycLabels[user.kycStatus]}</p>
         <p className="mt-5 text-sm leading-6 text-slate-300">Đối chiếu thông tin người nhận trực tiếp khi bàn giao máy.</p>
-        <p className="mt-3 text-sm text-slate-400">Trạng thái này không thay đổi giá thuê, tiền cọc hoặc quyền đặt máy.</p>
+
       </section>}
 
       {tab === 'thue' && <section className="mt-7 space-y-4">
         <h2 className="text-xl font-bold text-white">Đơn thuê đã ghi nhận</h2>
-        <p className="text-sm text-slate-400">Theo dõi lịch thuê, biên bản bàn giao và tiến trình hoàn cọc.</p>
+
         {listError ? <p role="alert" className="text-red-300">{listError}</p> : !rentals ? <p role="status" className="text-slate-400">Đang tải...</p> : rentals.length === 0 ? <p className="rounded-xl border border-film-border bg-film-card p-6 text-slate-300">Bạn chưa có đơn thuê nào.</p> : rentals.map((rental) =>
           <article key={rental.id} className="rounded-xl border border-film-border bg-film-card p-5">
             <h3 className="font-semibold text-white">{rental.cameraItem.product.modelName}</h3>
             <p className="mt-1 text-sm text-slate-300">Mã {rental.bookingCode} · chiếc {rental.cameraItem.serialNumber}</p>
             <p className="mt-2 text-sm text-slate-400">Trạng thái đơn: {rental.status} · Cọc: {rental.depositStatus}</p>
-            {rental.paymentAttempt && <p className="mt-1 text-sm text-amber-300">ZaloPay Sandbox · {rental.paymentAttempt.status}</p>}
+            {rental.paymentAttempt && <p className="mt-1 text-sm text-amber-300">ZaloPay · {rental.paymentAttempt.status}</p>}
             <p className="mt-1 text-sm text-slate-400">Tiền thuê ghi nhận: {money(rental.totalRentalFee)}</p>
             <div className="mt-3 flex flex-wrap gap-4"><Link to={`/tai-khoan/don-thue/${rental.id}`} className="inline-flex min-h-11 items-center text-sm font-semibold text-film-warm underline">Hồ sơ đơn và hoàn cọc</Link><Link to={`/thiet-bi/${rental.cameraItem.product.slug}`} className="inline-flex min-h-11 items-center text-sm text-slate-300 underline">Xem thiết bị</Link></div>
           </article>)}
@@ -137,7 +137,7 @@ export function AccountPage() {
 
       {tab === 'mua' && <section className="mt-7 space-y-4">
         <h2 className="text-xl font-bold text-white">Đơn mua đã ghi nhận</h2>
-        <p className="text-sm text-slate-400">Lịch sử mua máy và hồ sơ của từng chiếc.</p>
+
         {listError ? <p role="alert" className="text-red-300">{listError}</p> : !orders ? <p role="status" className="text-slate-400">Đang tải...</p> : orders.length === 0 ? <p className="rounded-xl border border-film-border bg-film-card p-6 text-slate-300">Bạn chưa có đơn mua nào.</p> : orders.map((order) =>
           <article key={order.id} className="rounded-xl border border-film-border bg-film-card p-5">
             <h3 className="font-semibold text-white">{order.cameraItem.product.modelName}</h3>

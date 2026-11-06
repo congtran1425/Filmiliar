@@ -46,9 +46,7 @@ export function DeviceFinder() {
               Chọn ngày chụp.<br /><span className="text-film-warm">Tìm chiếc máy.</span>
             </h2>
           </div>
-          <p className="max-w-md text-sm leading-7 text-white/70 sm:text-base">
-            Bắt đầu bằng loại thiết bị và khoảng ngày dự kiến. Sau đó, xem từng chiếc máy để kiểm tra lịch trống và mức cọc.
-          </p>
+
         </div>
 
         <form onSubmit={submit} className="mt-9 overflow-hidden rounded-[1.75rem] bg-film-paperRaised text-film-ink shadow-[0_24px_70px_rgba(0,0,0,0.14)] lg:mt-12 lg:grid lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
@@ -73,7 +71,7 @@ export function DeviceFinder() {
                 );
               })}
             </div>
-            <p className="mt-5 text-xs leading-5 text-film-ink/65">Xem toàn bộ bộ sưu tập, hoặc lọc riêng thân máy và ống kính.</p>
+
           </fieldset>
 
           <div className="min-w-0 p-5 sm:p-8">
@@ -94,12 +92,12 @@ export function DeviceFinder() {
                 <input type="date" lang="vi-VN" min={start ? addDays(start, 1) : addDays(today, 1)} max={start ? addDays(start, 30) : addDays(today, 120)} required={dateStarted} value={end} onChange={event => setEnd(event.target.value)} className={dateInput} />
               </label>
             </div>
-            <p className="mt-3 min-h-5 text-xs leading-5 text-film-ink/60">Có thể bỏ trống ngày để xem máy trước. Nếu chọn lịch, thời gian thuê từ 1 đến 30 ngày.</p>
+
             <button type="submit" className="mt-6 flex min-h-14 w-full items-center justify-between gap-4 rounded-xl bg-film-teal px-5 text-sm font-bold text-white transition-colors hover:bg-film-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-film-teal active:translate-y-px sm:text-base">
               <span className="whitespace-nowrap">{start && end ? 'Tìm máy theo lịch' : 'Khám phá thiết bị'}</span>
               <ArrowRight size={20} strokeWidth={1.8} aria-hidden="true" />
             </button>
-            <p className="mt-3 text-xs leading-5 text-film-ink/60">Lịch trống được xác nhận trên trang của từng chiếc máy.</p>
+
           </div>
         </form>
 

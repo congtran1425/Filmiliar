@@ -135,7 +135,7 @@ export function PaymentQrModal({ cameraItemId, startDate, endDate, quoteHash, te
         className="max-h-[100dvh] w-full max-w-4xl overflow-y-auto rounded-t-2xl border border-film-border bg-film-dark shadow-2xl outline-none sm:max-h-[90dvh] sm:rounded-2xl">
         <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-film-border bg-film-dark px-4 py-4 sm:px-6">
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-film-warm">Filmiliar · ZaloPay Sandbox</p>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-film-warm">Filmiliar · ZaloPay</p>
             <h2 id={titleId} className="mt-1 text-xl font-bold text-white sm:text-2xl">Thanh toán đơn thuê</h2>
           </div>
           <button type="button" onClick={onClose} aria-label="Đóng cửa sổ thanh toán" className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-lg border border-film-border text-slate-200 hover:bg-film-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-film-warm active:scale-95"><X className="h-5 w-5" /></button>
