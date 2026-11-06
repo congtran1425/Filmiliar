@@ -1,5 +1,4 @@
 import React from 'react';
-import { RotateCcw } from 'lucide-react';
 import type { SupportInfoTab } from '../pages/SupportPage';
 import { Link } from 'react-router-dom';
 import { filmiliarContact, filmiliarCopyright } from '../content/filmiliar';
@@ -10,92 +9,67 @@ interface FooterProps {
   onScrollToCatalog: () => void;
 }
 
+/* Hallmark · component: footer · theme: Filmiliar · pre-emit critique: P4 H4 E4 S5 R5 V4 */
+const footerLink = 'inline-flex max-w-full items-center py-1 text-left leading-6 transition-colors hover:text-film-warm focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-film-warm active:text-film-warm';
+
 export const Footer: React.FC<FooterProps> = ({ onOpenInfo, onOpenQuiz, onScrollToCatalog }) => {
   return (
-    <footer className="border-t border-film-border bg-film-dark text-slate-400 text-xs py-12">
+    <footer className="border-t border-film-border bg-film-dark py-8 text-sm text-slate-300 sm:py-10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          {/* Col 1 */}
-          <div className="space-y-3">
+        <div className="grid gap-x-10 gap-y-7 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,.9fr)_minmax(0,1.3fr)]">
+          <div className="min-w-0 sm:col-span-2 lg:col-span-1">
             <Link
               to="/"
               className="inline-flex rounded-lg bg-film-paperRaised px-2 py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-film-warm"
               aria-label="Filmiliar — về đầu trang"
             >
-              <img src="/filmiliar-logo.png" alt="" className="block h-9 w-auto" />
+              <img src="/filmiliar-logo.png" alt="" className="block h-8 w-auto" />
             </Link>
-            <p className="text-slate-400 text-xs leading-relaxed">
-              Khám phá máy ảnh second-hand để thuê hoặc mua. Thông tin về tình trạng thiết bị được hiển thị khi đã có hồ sơ kiểm định.
+            <p className="mt-3 max-w-[32ch] text-sm leading-6 text-slate-400">
+              Máy ảnh và ống kính second-hand để thuê hoặc mua.
             </p>
-            <nav aria-label="Đường dẫn chính" className="flex flex-wrap gap-x-3 gap-y-1 text-xs"><Link to="/quy-trinh" className="hover:text-white">Quy trình</Link><Link to="/san-pham" className="hover:text-white">Sản phẩm</Link><Link to="/lien-he" className="hover:text-white">Liên hệ</Link></nav>
           </div>
 
-          {/* Col 2 */}
-          <div className="space-y-2.5">
-            <h4 className="text-xs font-semibold text-white uppercase tracking-wider">Khám phá Filmiliar</h4>
-            <ul className="space-y-2">
+          <nav aria-label="Khám phá Filmiliar" className="min-w-0">
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-white">Khám phá Filmiliar</h2>
+            <ul>
               <li>
-                <button onClick={onScrollToCatalog} className="hover:text-amber-400 transition-colors">
-                  Danh mục máy ảnh & ống kính
+                <button type="button" onClick={onScrollToCatalog} className={footerLink}>
+                  Danh mục thiết bị
                 </button>
               </li>
               <li>
-                <button onClick={() => onOpenInfo('DEPOSIT_POLICY')} className="hover:text-amber-400 transition-colors flex items-center space-x-1.5">
-                  <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Thông tin đặt cọc</span>
-                </button>
+                <Link to="/quy-trinh" className={footerLink}>Quy trình thuê</Link>
               </li>
               <li>
-                <button onClick={() => onOpenInfo('WARRANTY')} className="hover:text-amber-400 transition-colors">
-                  Thông tin bảo hành
-                </button>
-              </li>
-              <li>
-                <button onClick={onOpenQuiz} className="hover:text-amber-400 transition-colors">
-                  Camera Match Quiz (Tư vấn máy)
+                <button type="button" onClick={onOpenQuiz} className={footerLink}>
+                  Tư vấn chọn máy
                 </button>
               </li>
             </ul>
-          </div>
+          </nav>
 
-          {/* Col 3 */}
-          <div className="space-y-2.5">
-            <h4 className="text-xs font-semibold text-white uppercase tracking-wider">Hỗ trợ & thông tin</h4>
-            <div className="space-y-2 text-slate-400">
-              <a href={filmiliarContact.phoneHref} className="flex min-h-11 items-center text-sm text-white hover:text-film-warm">{filmiliarContact.phone}</a>
-              <a href={`mailto:${filmiliarContact.email}`} className="flex min-h-11 min-w-0 items-center break-all text-xs leading-6 hover:text-white">{filmiliarContact.email}</a>
-              <a href={filmiliarContact.mapsUrl} target="_blank" rel="noopener noreferrer" className="flex min-h-11 items-center text-xs leading-6 hover:text-white">{filmiliarContact.address}</a>
-              <button
-                onClick={() => onOpenInfo('CONTACT')}
-                className="flex items-start space-x-2 text-left hover:text-white transition-colors"
-              >
-                <span>Liên hệ nhóm Filmiliar</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Col 4 */}
-          <div className="space-y-2.5">
-            <h4 className="text-xs font-semibold text-white uppercase tracking-wider">Thuê máy dễ dàng</h4>
-            <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 text-[11px] space-y-2 text-slate-300 leading-relaxed">
-              <p>Chọn chiếc máy và kiểm tra lịch thuê.</p>
-              <p>Xem rõ tiền thuê và mức cọc trước khi đặt.</p>
-              <p>Theo dõi bàn giao và hoàn cọc trong tài khoản.</p>
-            </div>
-          </div>
+          <section aria-labelledby="footer-contact-title" className="min-w-0">
+            <h2 id="footer-contact-title" className="mb-2 text-xs font-semibold uppercase tracking-wider text-white">Hỗ trợ & thông tin</h2>
+            <address className="flex flex-col items-start text-xs not-italic">
+              <a href={filmiliarContact.phoneHref} className={`${footerLink} text-sm font-medium text-white`}>{filmiliarContact.phone}</a>
+              <a href={`mailto:${filmiliarContact.email}`} className={footerLink}>{filmiliarContact.email}</a>
+              <a href={filmiliarContact.mapsUrl} target="_blank" rel="noopener noreferrer" className={footerLink}>{filmiliarContact.address}</a>
+            </address>
+          </section>
         </div>
 
-        <div className="mt-8 pt-6 border-t border-slate-900 flex flex-col sm:flex-row justify-between items-center text-[11px] text-slate-500">
+        <div className="mt-6 flex flex-col gap-x-6 gap-y-2 border-t border-film-border pt-4 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
           <div>{filmiliarCopyright}</div>
-          <div className="flex space-x-4 mt-2 sm:mt-0">
-            <button onClick={() => onOpenInfo('DEPOSIT_POLICY')} className="hover:underline">
+          <nav aria-label="Chính sách Filmiliar" className="flex flex-wrap gap-x-5">
+            <button type="button" onClick={() => onOpenInfo('DEPOSIT_POLICY')} className={footerLink}>
               Thông tin đặt cọc
             </button>
-            <Link to="/thong-tin/chinh-sach" className="hover:underline">Chính sách thuê và bán</Link>
-            <button onClick={() => onOpenInfo('CONTACT')} className="hover:underline">
-              Liên hệ
+            <button type="button" onClick={() => onOpenInfo('WARRANTY')} className={footerLink}>
+              Thông tin bảo hành
             </button>
-          </div>
+            <Link to="/thong-tin/chinh-sach" className={footerLink}>Chính sách thuê và bán</Link>
+          </nav>
         </div>
       </div>
     </footer>
