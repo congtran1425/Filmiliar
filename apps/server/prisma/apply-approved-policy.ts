@@ -6,6 +6,7 @@ import { APPROVED_RULES, APPROVED_TERMS, POLICY_RELEASE } from '../dist/services
 const prisma = new PrismaClient();
 type Entry = { slug: string; serialNumber: string; shutterCount: number; conditionGrade: string; sensorInspection: string; opticsCondition: string; scratchNotes: string; depositAmount: number; passport: Prisma.InputJsonObject };
 const entries: Entry[] = JSON.parse(readFileSync('apps/server/prisma/data/approved-passports.json', 'utf8'));
+async function main() {
 try {
   for (const entry of entries) {
     const passport = entry.passport as Record<string, any>;
@@ -32,3 +33,6 @@ try {
   });
   console.log('Approved policy and exact-serial passports checked.');
 } finally { await prisma.$disconnect(); }
+}
+
+main().catch(error => { console.error(error instanceof Error ? error.message : 'Approved policy import failed'); process.exitCode = 1; });
