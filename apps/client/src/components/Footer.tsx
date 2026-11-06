@@ -1,11 +1,11 @@
 import React from 'react';
-import { ShieldCheck, RotateCcw, BookOpen } from 'lucide-react';
-import { InfoTabType } from './InfoPagesModal';
+import { RotateCcw } from 'lucide-react';
+import type { SupportInfoTab } from '../pages/SupportPage';
 import { Link } from 'react-router-dom';
 import { filmiliarContact, filmiliarCopyright } from '../content/filmiliar';
 
 interface FooterProps {
-  onOpenInfo: (tab: InfoTabType) => void;
+  onOpenInfo: (tab: SupportInfoTab) => void;
   onOpenQuiz: () => void;
   onScrollToCatalog: () => void;
 }
@@ -27,7 +27,7 @@ export const Footer: React.FC<FooterProps> = ({ onOpenInfo, onOpenQuiz, onScroll
             <p className="text-slate-400 text-xs leading-relaxed">
               Khám phá máy ảnh second-hand để thuê hoặc mua. Thông tin về tình trạng thiết bị được hiển thị khi đã có hồ sơ kiểm định.
             </p>
-            <nav aria-label="Đường dẫn chính" className="flex flex-wrap gap-x-3 gap-y-1 text-xs"><Link to="/quy-trinh" className="hover:text-white">Quy trình</Link><Link to="/san-pham" className="hover:text-white">Sản phẩm</Link><Link to="/cam-nang" className="hover:text-white">Cẩm nang</Link><Link to="/lien-he" className="hover:text-white">Liên hệ</Link></nav>
+            <nav aria-label="Đường dẫn chính" className="flex flex-wrap gap-x-3 gap-y-1 text-xs"><Link to="/quy-trinh" className="hover:text-white">Quy trình</Link><Link to="/san-pham" className="hover:text-white">Sản phẩm</Link><Link to="/lien-he" className="hover:text-white">Liên hệ</Link></nav>
           </div>
 
           {/* Col 2 */}
@@ -39,13 +39,6 @@ export const Footer: React.FC<FooterProps> = ({ onOpenInfo, onOpenQuiz, onScroll
                   Danh mục máy ảnh & ống kính
                 </button>
               </li>
-              <li>
-                <button onClick={() => onOpenInfo('INSPECTION')} className="hover:text-amber-400 transition-colors flex items-center space-x-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Thông tin kiểm định</span>
-                </button>
-              </li>
-
               <li>
                 <button onClick={() => onOpenInfo('DEPOSIT_POLICY')} className="hover:text-amber-400 transition-colors flex items-center space-x-1.5">
                   <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
@@ -77,10 +70,6 @@ export const Footer: React.FC<FooterProps> = ({ onOpenInfo, onOpenQuiz, onScroll
                 className="flex items-start space-x-2 text-left hover:text-white transition-colors"
               >
                 <span>Liên hệ nhóm Filmiliar</span>
-              </button>
-              <button onClick={() => onOpenInfo('BLOG')} className="hover:text-film-warm transition-colors flex items-center space-x-1.5">
-                <BookOpen className="w-3.5 h-3.5 text-film-warm" />
-                <span>Cẩm nang & kinh nghiệm nhiếp ảnh</span>
               </button>
             </div>
           </div>

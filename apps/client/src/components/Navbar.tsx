@@ -2,18 +2,17 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { Menu, ShoppingBag, User, X } from 'lucide-react';
 import { useCart } from '../lib/CartContext';
-import type { InfoTabType } from './InfoPagesModal';
+import type { SupportInfoTab } from '../pages/SupportPage';
 
 type NavbarProps = {
   currentUser: { fullName?: string; email?: string; role?: string } | null;
   onOpenAuth: () => void; onLogout: () => void; onOpenMyRentals: () => void; onOpenAdmin: () => void;
-  onOpenQuiz?: () => void; onScrollToCatalog?: () => void; onOpenInfo?: (tab: InfoTabType) => void;
+  onOpenQuiz?: () => void; onScrollToCatalog?: () => void; onOpenInfo?: (tab: SupportInfoTab) => void;
 };
 const links = [
   { to: '/', label: 'Trang chủ' },
   { to: '/quy-trinh', label: 'Quy trình' },
   { to: '/san-pham', label: 'Sản phẩm' },
-  { to: '/cam-nang', label: 'Cẩm nang' },
   { to: '/lien-he', label: 'Liên hệ' },
 ];
 

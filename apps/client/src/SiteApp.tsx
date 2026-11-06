@@ -5,13 +5,12 @@ import { Footer } from './components/Footer';
 import { CartDrawer } from './components/CartDrawer';
 import { CameraMatchQuizModal } from './components/CameraMatchQuizModal';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { InfoTabType } from './components/InfoPagesModal';
 import { CatalogPage } from './pages/CatalogPage';
 import { HomePage } from './pages/HomePage';
 import { ProcessPage } from './pages/ProcessPage';
 import { ProductPage } from './pages/ProductPage';
 import { ReviewPage } from './pages/ReviewPage';
-import { SupportPage, supportPaths } from './pages/SupportPage';
+import { SupportPage, supportPaths, type SupportInfoTab } from './pages/SupportPage';
 import { AuthPage } from './pages/AuthPage';
 import { AccountPage } from './pages/AccountPage';
 import { RentalBookingPage } from './pages/RentalBookingPage';
@@ -43,7 +42,7 @@ export default function SiteApp() {
     signOut();
     navigate('/');
   };
-  const openInfo = (tab: InfoTabType) => navigate(supportPaths[tab]);
+  const openInfo = (tab: SupportInfoTab) => navigate(supportPaths[tab]);
 
   return (
     <div className="flex min-h-screen flex-col bg-film-dark font-sans text-slate-100">
@@ -55,7 +54,9 @@ export default function SiteApp() {
         <Route path="/thue" element={<LegacyCatalogRedirect mode="rent" />} />
         <Route path="/mua" element={<LegacyCatalogRedirect mode="buy" />} />
         <Route path="/quy-trinh" element={<ProcessPage />} />
-        <Route path="/cam-nang" element={<SupportPage topicOverride="cam-nang" />} />
+        <Route path="/cam-nang" element={<Navigate to="/san-pham" replace />} />
+        <Route path="/thong-tin/cam-nang" element={<Navigate to="/san-pham" replace />} />
+        <Route path="/thong-tin/kiem-dinh" element={<Navigate to="/san-pham" replace />} />
         <Route path="/lien-he" element={<SupportPage topicOverride="lien-he" />} />
         <Route path="/thiet-bi/:slug" element={<ProductPage />} />
         <Route path="/thiet-bi/:slug/xem-lai/:mode" element={<ReviewPage />} />
