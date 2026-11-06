@@ -43,6 +43,7 @@ export interface ProductDetail extends ProductSummary {
 export interface CatalogResponse<T> {
   data: T;
   isDemo: boolean;
+  isFallback?: boolean;
 }
 
 type ApiEnvelope<T> = { success: boolean; data?: T; isDemo?: boolean; message?: string };
@@ -495,7 +496,7 @@ export async function getCatalog(signal?: AbortSignal): Promise<CatalogResponse<
     };
   } catch (error) {
     if (signal?.aborted) throw error;
-    return { data: DEMO_PRODUCTS, isDemo: true };
+    return { data: DEMO_PRODUCTS, isDemo: true, isFallback: true };
   }
 }
 
@@ -505,6 +506,6 @@ export async function getProduct(slug: string, signal?: AbortSignal): Promise<Ca
     return { data: raw ? fromApiProduct(raw.data) : null, isDemo: raw?.isDemo || false };
   } catch (error) {
     if (signal?.aborted) throw error;
-    return { data: DEMO_PRODUCTS.find((product) => product.slug === slug) || null, isDemo: true };
+    return { data: DEMO_PRODUCTS.find((product) => product.slug === slug) || null, isDemo: true, isFallback: true };
   }
 }

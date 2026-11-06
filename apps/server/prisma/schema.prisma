@@ -86,6 +86,7 @@ model User {
   eSignatureUrl   String?
   
   rentals         RentalBooking[]
+  rentalBundles   RentalBundle[]
   paymentAttempts PaymentAttempt[]
   orders          Order[]
   passwordResets  PasswordResetToken[]
@@ -172,6 +173,18 @@ model CameraItem {
   @@index([modelId])
 }
 
+model RentalBundle {
+  id        String          @id @default(uuid())
+  code      String          @unique
+  userId    String
+  user      User            @relation(fields: [userId], references: [id])
+  bookings  RentalBooking[]
+  createdAt DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime        @updatedAt @db.Timestamptz(3)
+
+  @@index([userId, createdAt])
+}
+
 model RentalBooking {
   id                   String        @id @default(uuid())
   bookingCode          String        @unique // e.g. BK-202609-8472
@@ -179,6 +192,8 @@ model RentalBooking {
   user                 User          @relation(fields: [userId], references: [id])
   cameraItemId         Int
   cameraItem           CameraItem    @relation(fields: [cameraItemId], references: [id])
+  bundleId             String?
+  bundle               RentalBundle? @relation(fields: [bundleId], references: [id])
   
   startDate            DateTime
   endDate              DateTime
@@ -223,6 +238,7 @@ model RentalBooking {
 
   @@index([userId])
   @@index([cameraItemId])
+  @@unique([bundleId, cameraItemId])
 }
 
 model PaymentAttempt {

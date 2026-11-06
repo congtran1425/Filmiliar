@@ -10,6 +10,7 @@ import { HomePage } from './pages/HomePage';
 import { ProcessPage } from './pages/ProcessPage';
 import { ProductPage } from './pages/ProductPage';
 import { ReviewPage } from './pages/ReviewPage';
+import { CheckoutPage } from './pages/CheckoutPage';
 import { SupportPage, supportPaths, type SupportInfoTab } from './pages/SupportPage';
 import { AuthPage } from './pages/AuthPage';
 import { AccountPage } from './pages/AccountPage';
@@ -51,6 +52,7 @@ export default function SiteApp() {
       <Routes>
         <Route path="/" element={<HomePage onOpenQuiz={() => setIsQuizOpen(true)} />} />
         <Route path="/san-pham" element={<CatalogPage />} />
+        <Route path="/dat-thue" element={<CheckoutPage />} />
         <Route path="/thue" element={<LegacyCatalogRedirect mode="rent" />} />
         <Route path="/mua" element={<LegacyCatalogRedirect mode="buy" />} />
         <Route path="/quy-trinh" element={<ProcessPage />} />
@@ -68,6 +70,7 @@ export default function SiteApp() {
         <Route path="/tai-khoan" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
         <Route path="/tai-khoan/bao-mat" element={<ProtectedRoute><SecurityPage /></ProtectedRoute>} />
         <Route path="/tai-khoan/don-thue/:id" element={<ProtectedRoute><RentalBookingPage /></ProtectedRoute>} />
+        <Route path="/tai-khoan/bo-thue/:id" element={<ProtectedRoute><RentalBookingPage bundle /></ProtectedRoute>} />
         <Route path="/admin" element={<ProtectedRoute admin><Suspense fallback={<main className="mx-auto w-full max-w-7xl flex-1 px-4 py-16 text-slate-300" role="status">Đang mở trung tâm quản trị...</main>}><AdminPage /></Suspense></ProtectedRoute>} />
         <Route path="*" element={<main className="mx-auto w-full max-w-7xl flex-1 px-4 py-20"><p className="text-xs uppercase tracking-wider text-film-warm">404</p><h1 className="mt-2 text-3xl font-bold text-white">Không tìm thấy trang</h1><p className="mt-3 text-slate-400">Đường dẫn này không có trong Filmiliar.</p><Link to="/" className="mt-6 inline-block rounded-lg bg-film-warm px-4 py-2.5 text-sm font-bold text-film-dark">Về trang chủ</Link></main>} />
       </Routes>

@@ -5,9 +5,12 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { apiRequest, useSession } from '../lib/session';
 import type { SessionUser } from '../lib/session';
 import { normalizePhone } from '../lib/phone';
+import { rentalStatus } from '../lib/rental';
+import type { RentalBooking } from '../lib/rental';
 
 type Tab = 'ho-so' | 'dinh-danh' | 'thue' | 'mua';
 type Rental = {
+  bundleSummary?: RentalBooking['bundleSummary'];
   id: string; bookingCode: string; status: string; depositStatus: string;
   startDate: string; endDate: string; totalRentalFee: number;
   cameraItem: { serialNumber: string; product: { modelName: string; slug: string } };
@@ -126,12 +129,12 @@ export function AccountPage() {
 
         {listError ? <p role="alert" className="text-red-300">{listError}</p> : !rentals ? <p role="status" className="text-slate-400">Đang tải...</p> : rentals.length === 0 ? <p className="rounded-xl border border-film-border bg-film-card p-6 text-slate-300">Bạn chưa có đơn thuê nào.</p> : rentals.map((rental) =>
           <article key={rental.id} className="rounded-xl border border-film-border bg-film-card p-5">
-            <h3 className="font-semibold text-white">{rental.cameraItem.product.modelName}</h3>
-            <p className="mt-1 text-sm text-slate-300">Mã {rental.bookingCode} · chiếc {rental.cameraItem.serialNumber}</p>
-            <p className="mt-2 text-sm text-slate-400">Trạng thái đơn: {rental.status} · Cọc: {rental.depositStatus}</p>
+            <h3 className="font-semibold text-white">{rental.bundleSummary ? `Bộ thuê ${rental.bundleSummary.count} thiết bị` : rental.cameraItem.product.modelName}</h3>
+            <p className="mt-1 break-all text-sm text-slate-300">Mã {rental.bundleSummary?.code || rental.bookingCode}{!rental.bundleSummary && ` · chiếc ${rental.cameraItem.serialNumber}`}</p>
+            <p className="mt-2 text-sm text-slate-400">Trạng thái đơn: {rentalStatus[rental.bundleSummary?.status || rental.status] || rental.status} · Cọc: {({PENDING:'Chưa thu',HELD:'Đang giữ',REFUND_PENDING:'Đang hoàn',REFUNDED:'Đã hoàn',DEDUCTED:'Đã khấu trừ và hoàn phần còn lại'} as Record<string,string>)[rental.bundleSummary?.depositStatus || rental.depositStatus] || rental.depositStatus}</p>
             {rental.paymentAttempt && <p className="mt-1 text-sm text-amber-300">ZaloPay · {rental.paymentAttempt.status}</p>}
-            <p className="mt-1 text-sm text-slate-400">Tiền thuê ghi nhận: {money(rental.totalRentalFee)}</p>
-            <div className="mt-3 flex flex-wrap gap-4"><Link to={`/tai-khoan/don-thue/${rental.id}`} className="inline-flex min-h-11 items-center text-sm font-semibold text-film-warm underline">Hồ sơ đơn và hoàn cọc</Link><Link to={`/thiet-bi/${rental.cameraItem.product.slug}`} className="inline-flex min-h-11 items-center text-sm text-slate-300 underline">Xem thiết bị</Link></div>
+            <p className="mt-1 text-sm text-slate-400">Tiền thuê ghi nhận: {money(rental.bundleSummary?.totalRentalFee ?? rental.totalRentalFee)}</p>
+            <div className="mt-3 flex flex-wrap gap-4"><Link to={rental.bundleSummary ? `/tai-khoan/bo-thue/${rental.bundleSummary.id}` : `/tai-khoan/don-thue/${rental.id}`} className="inline-flex min-h-11 items-center text-sm font-semibold text-film-warm underline">Hồ sơ đơn và hoàn cọc</Link>{!rental.bundleSummary&&<Link to={`/thiet-bi/${rental.cameraItem.product.slug}`} className="inline-flex min-h-11 items-center text-sm text-slate-300 underline">Xem thiết bị</Link>}</div>
           </article>)}
       </section>}
 

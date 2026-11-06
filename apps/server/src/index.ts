@@ -11,6 +11,8 @@ import { uploadService } from './services/upload.service.js';
 import { createSessionToken, getSessionUser, hashPassword, verifyPassword } from './auth.js';
 import { registerPaymentRoutes } from './routes/payment.js';
 import { registerRentalRoutes } from './routes/rental.js';
+import { registerBundleRoutes } from './routes/bundle.js';
+import { visibleRentalWhere, rentalListView } from './services/bundle-list.js';
 import { normalizePhone } from './phone.js';
 import { registerAccountSecurityRoutes } from './routes/account-security.js';
 import { parseRentalDates, PaymentFlowError } from './services/payment-flow.js';
@@ -368,6 +370,7 @@ app.post('/api/upload', requireUser, requireAdmin, (req: Request, res: Response,
 // Sandbox checkout is available to signed-in customers when the host enables it.
 registerPaymentRoutes(app, prisma, requireUser, requireAdmin);
 registerRentalRoutes(app, prisma, requireUser, requireAdmin);
+registerBundleRoutes(app, prisma, requireUser, requireAdmin);
 registerAccountSecurityRoutes(app, prisma, requireUser);
 
 // ==========================================
@@ -541,8 +544,9 @@ app.post('/api/user/kyc', requireUser, requireApprovedAdminWorkflow, async (req:
 app.get('/api/user/rentals', requireUser, async (_req: Request, res: Response) => {
   try {
     const bookings = await prisma.rentalBooking.findMany({
-      where: { userId: res.locals.user.id },
+      where: { userId: res.locals.user.id, ...visibleRentalWhere },
       include: {
+        bundle: { include: { bookings: { select: { status: true, totalRentalFee: true, depositAmount: true, depositStatus: true, deductionAmount: true } } } },
         cameraItem: {
           include: { product: true }
         },
@@ -552,7 +556,7 @@ app.get('/api/user/rentals', requireUser, async (_req: Request, res: Response) =
       take: 20
     });
 
-    res.json(serializeData({ success: true, data: bookings }));
+    res.json(serializeData({ success: true, data: bookings.map(rentalListView) }));
   } catch {
     res.status(500).json({ success: false, message: 'Không thể tải đơn thuê lúc này' });
   }
@@ -580,16 +584,18 @@ app.get('/api/user/orders', requireUser, async (_req: Request, res: Response) =>
 app.get('/api/admin/bookings', requireUser, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { status, q } = req.query;
-    const where: any = {};
+    const where: any = { AND: [visibleRentalWhere] };
 
     if (typeof status === 'string' && Object.values(BookingStatus).includes(status as BookingStatus)) {
-      where.status = status as BookingStatus;
+      where.AND.push({ OR: [{ bundleId: null, status }, { bundle: { bookings: { [status === 'RETURNED_PENDING_INSPECTION' ? 'some' : 'every']: { status } } } }] });
     }
 
     if (typeof q === 'string' && q.trim().length > 0) {
       const term = q.trim();
       where.OR = [
         { bookingCode: { contains: term, mode: 'insensitive' } },
+        { bundle: { code: { contains: term, mode: 'insensitive' } } },
+        { bundle: { bookings: { some: { cameraItem: { serialNumber: { contains: term, mode: 'insensitive' } } } } } },
         { user: { fullName: { contains: term, mode: 'insensitive' } } },
         { user: { email: { contains: term, mode: 'insensitive' } } },
         { user: { phone: { contains: term, mode: 'insensitive' } } },
@@ -600,6 +606,7 @@ app.get('/api/admin/bookings', requireUser, requireAdmin, async (req: Request, r
     const bookings = await prisma.rentalBooking.findMany({
       where,
       include: {
+        bundle: { include: { bookings: { select: { status: true, totalRentalFee: true, depositAmount: true, depositStatus: true, deductionAmount: true } } } },
         user: {
           select: {
             id: true,
@@ -621,7 +628,7 @@ app.get('/api/admin/bookings', requireUser, requireAdmin, async (req: Request, r
       take: 100
     });
 
-    res.json(serializeData({ success: true, data: bookings }));
+    res.json(serializeData({ success: true, data: bookings.map(rentalListView) }));
   } catch (error: any) {
     res.status(500).json({ success: false, message: 'Không thể tải đơn thuê: ' + error.message });
   }
@@ -774,20 +781,20 @@ app.get('/api/admin/stats', requireUser, requireAdmin, async (_req: Request, res
       prisma.cameraItem.count({ where: { status: ItemStatus.RENTED } }),
       prisma.cameraItem.count({ where: { status: ItemStatus.MAINTENANCE } }),
       prisma.cameraItem.count({ where: { status: ItemStatus.SOLD } }),
-      prisma.rentalBooking.count(),
-      prisma.rentalBooking.count({ where: { status: BookingStatus.ACTIVE_RENTAL } }),
-      prisma.rentalBooking.count({ where: { status: BookingStatus.CONFIRMED } }),
-      prisma.rentalBooking.count({ where: { status: BookingStatus.RETURNED_PENDING_INSPECTION } }),
-      prisma.rentalBooking.count({ where: { status: BookingStatus.COMPLETED } }),
+      prisma.rentalBooking.count({ where: visibleRentalWhere }),
+      prisma.rentalBooking.count({ where: { AND: [visibleRentalWhere, { OR: [{ bundleId: null, status: BookingStatus.ACTIVE_RENTAL }, { bundle: { bookings: { every: { status: BookingStatus.ACTIVE_RENTAL } } } }] }] } }),
+      prisma.rentalBooking.count({ where: { AND: [visibleRentalWhere, { OR: [{ bundleId: null, status: BookingStatus.CONFIRMED }, { bundle: { bookings: { every: { status: BookingStatus.CONFIRMED } } } }] }] } }),
+      prisma.rentalBooking.count({ where: { AND: [visibleRentalWhere, { OR: [{ bundleId: null, status: BookingStatus.RETURNED_PENDING_INSPECTION }, { bundle: { bookings: { some: { status: BookingStatus.RETURNED_PENDING_INSPECTION } } } }] }] } }),
+      prisma.rentalBooking.count({ where: { AND: [visibleRentalWhere, { OR: [{ bundleId: null, status: BookingStatus.COMPLETED }, { bundle: { bookings: { every: { status: BookingStatus.COMPLETED } } } }] }] } }),
       prisma.rentalBooking.count({
         where: {
-          status: BookingStatus.ACTIVE_RENTAL,
+          AND: [visibleRentalWhere], status: BookingStatus.ACTIVE_RENTAL,
           endDate: { gte: todayStart, lt: tomorrowStart }
         }
       }),
       prisma.rentalBooking.count({
         where: {
-          status: BookingStatus.ACTIVE_RENTAL,
+          AND: [visibleRentalWhere], status: BookingStatus.ACTIVE_RENTAL,
           endDate: { lt: todayStart }
         }
       }),
@@ -796,7 +803,7 @@ app.get('/api/admin/stats', requireUser, requireAdmin, async (_req: Request, res
       prisma.user.count({ where: { kycStatus: KycStatus.PENDING } }),
       prisma.rentalBooking.aggregate({
         _sum: { depositAmount: true },
-        where: { depositStatus: DepositStatus.HELD, paymentAttempt: { is: null } }
+        where: { depositStatus: DepositStatus.HELD, bundleId: null, paymentAttempt: { is: null } }
       }),
       prisma.rentalBooking.aggregate({
         _sum: { depositAmount: true },
@@ -808,7 +815,7 @@ app.get('/api/admin/stats', requireUser, requireAdmin, async (_req: Request, res
       }),
       prisma.rentalBooking.aggregate({
         _sum: { depositAmount: true },
-        where: { depositStatus: DepositStatus.HELD, paymentAttempt: { is: { status: 'PAID' } } }
+        where: { depositStatus: DepositStatus.HELD, OR: [{ paymentAttempt: { is: { status: 'PAID' } } }, { bundle: { bookings: { some: { paymentAttempt: { is: { status: 'PAID' } } } } } }] }
       })
     ]);
 

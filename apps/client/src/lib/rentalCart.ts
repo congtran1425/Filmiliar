@@ -1,4 +1,5 @@
 import type { ProductSummary } from './catalog';
+import catalogMounts from '../../../server/src/content/rental-mounts.json';
 
 export type LensMount = 'Sony E' | 'Fujifilm X' | 'Canon RF' | 'Canon EF-M' | 'Nikon Z';
 
@@ -8,22 +9,14 @@ export type LensMount = 'Sony E' | 'Fujifilm X' | 'Canon RF' | 'Canon EF-M' | 'N
 // cam.start.canon/en/C011/manual/html/UG-11_Reference_0090.html,
 // usa.canon.com/support/p/eos-m50, asia.canon/en/support/6200654100,
 // nikonusa.com/p/z-30/1737/overview.
-const mounts: Record<string, LensMount> = {
-  'sony-alpha-a6700': 'Sony E', 'sony-zv-e10': 'Sony E',
-  'sony-e-35mm-f1-8-oss': 'Sony E', 'sony-fe-50mm-f1-8': 'Sony E',
-  'fujifilm-x-t50': 'Fujifilm X', 'fujifilm-x-t30-ii': 'Fujifilm X',
-  'fujifilm-x-t100': 'Fujifilm X', 'fujifilm-x-s10': 'Fujifilm X',
-  'fujifilm-xf-35mm-f1-4-r': 'Fujifilm X',
-  'canon-eos-r50': 'Canon RF', 'canon-rf-50mm-f1-8-stm': 'Canon RF',
-  'canon-eos-m50': 'Canon EF-M', 'canon-eos-m200': 'Canon EF-M',
-  'nikon-z30': 'Nikon Z',
-};
+const mounts = catalogMounts as Record<string, LensMount>;
 
 export function isLens(product: ProductSummary): boolean { return product.category === 'Lens'; }
 export function getMount(product: ProductSummary): LensMount | undefined { return mounts[product.slug]; }
 
 export function cartAddError(existing: ProductSummary[], candidate: ProductSummary): string | null {
   if (existing.some((item) => item.slug === candidate.slug)) return 'Thiết bị đã có trong bộ dự kiến.';
+  if (existing.length >= 8) return 'Một bộ tối đa 8 thiết bị.';
   const body = existing.find((item) => !isLens(item));
   if (!isLens(candidate) && body) return 'Một bộ chỉ chọn một thân máy. Hãy bỏ thân máy cũ trước.';
   const compared = isLens(candidate) ? (body ? [body] : existing.filter(isLens)) : existing.filter(isLens);
@@ -34,9 +27,9 @@ export function cartAddError(existing: ProductSummary[], candidate: ProductSumma
   return null;
 }
 
-export function rentalDays(start: string, end: string): number {
-  const first = Date.parse(`${start}T12:00:00Z`);
-  const last = Date.parse(`${end}T12:00:00Z`);
-  if (!Number.isFinite(first) || !Number.isFinite(last) || last < first) return 0;
-  return Math.max(1, Math.round((last - first) / 86_400_000));
+export function rentalDays(start: string, end: string, startTime = '08:00', endTime = '08:00'): number {
+  const first = Date.parse(`${start}T${startTime}:00+07:00`);
+  const last = Date.parse(`${end}T${endTime}:00+07:00`);
+  if (!Number.isFinite(first) || !Number.isFinite(last) || last <= first) return 0;
+  return Math.ceil((last - first) / 86_400_000);
 }

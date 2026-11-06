@@ -357,7 +357,7 @@ export function ProductPage() {
             </div>
           </section>
 
-          <div className="pt-2"><button type="button" onClick={() => setAddError(cart.add(product))} className="mb-2 min-h-11 w-full rounded-xl border border-film-warm px-4 text-sm font-bold text-film-warm hover:bg-film-warm/10">Thêm vào bộ thuê dự kiến</button>{addError && <p role="status" className="mb-2 text-xs text-amber-200">{addError}</p>}
+          <div className="pt-2"><button type="button" onClick={() => setAddError(cart.add(product, selected?.id))} className="mb-2 min-h-11 w-full rounded-xl border border-film-warm px-4 text-sm font-bold text-film-warm hover:bg-film-warm/10">Thêm vào bộ thuê dự kiến</button>{addError && <p role="status" className="mb-2 text-xs text-amber-200">{addError}</p>}
             <Link
               to="/san-pham"
               className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white min-h-[44px]"

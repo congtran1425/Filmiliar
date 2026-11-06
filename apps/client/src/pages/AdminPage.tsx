@@ -20,6 +20,7 @@ type InventoryItem = {
   product: { id: number; modelName: string; brand: string; slug: string };
 };
 type Booking = {
+  bundleSummary?: import('../lib/rental').RentalBooking['bundleSummary'];
   id: string; bookingCode: string; status: string; depositStatus: string; startDate: string; endDate: string;
   user: { fullName: string; email: string; phone?: string | null; kycStatus: string };
   cameraItem: { serialNumber: string; product: { modelName: string } };
@@ -238,7 +239,7 @@ export function AdminPage() {
         </div>
       </section> : !error && <p role="status" className="mt-7 text-slate-400">Đang tải thống kê...</p>)}
 
-      {tab === 'don-thue' && <RentalAdminPanel bookings={bookings} onUpdated={booking => setBookings(items => items?.map(item => item.id === booking.id ? { ...item, status: booking.status, depositStatus: booking.depositStatus, paymentAttempt: booking.paymentAttempt } : item) || null)}/>}
+      {tab === 'don-thue' && <RentalAdminPanel bookings={bookings} onUpdated={booking => setBookings(items => items?.map(item => item.id === booking.id ? { ...item, status: booking.status, depositStatus: booking.depositStatus, paymentAttempt: booking.paymentAttempt, bundleSummary: booking.bundleSummary ?? item.bundleSummary, startDate:booking.startDate,endDate:booking.endDate } : item) || null)}/>}
 
       {tab === 'kho-may' && <section className="mt-7">
         <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-bold text-white">Kho máy theo serial</h2>

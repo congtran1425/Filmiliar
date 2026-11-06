@@ -1,7 +1,7 @@
 /* Hallmark · pre-emit critique: P4 H5 E4 S5 R5 V4 */
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { CheckCircle2, Clock3, Copy, Download, ExternalLink, ShieldAlert, X } from 'lucide-react';
 import { formatVnd } from '../lib/catalog';
@@ -13,20 +13,25 @@ type PaymentView = {
   appTransId: string; qrCode: string | null; orderUrl: string | null; expiresAt: string;
   cameraName: string; serialNumber: string; startDate: string; endDate: string;
   pickupAt?: string | null; dueAt?: string | null;
+  bundleId?: string | null; items?: {bookingId:string;cameraItemId:number;serialNumber:string;name:string;rentalFee:number;depositAmount:number}[];
   totalDays: number; rentalFee: number; depositAmount: number; totalAmount: number; sandbox: true;
 };
 
-export function PaymentQrModal({ cameraItemId, startDate, endDate, quoteHash, termsAccepted, onClose, startTime = '08:00', endTime = '08:00' }: {
+export function PaymentQrModal({ cameraItemId, cameraItemIds, existingBookingId, startDate, endDate, quoteHash, termsAccepted, onClose, onComplete, startTime = '08:00', endTime = '08:00' }: {
   cameraItemId: number; startDate: string; endDate: string; quoteHash: string; termsAccepted: boolean; onClose: () => void;
   startTime?: string; endTime?: string;
+  cameraItemIds?: number[]; existingBookingId?: string; onComplete?: () => void;
 }) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const [payment, setPayment] = useState<PaymentView | null>(null);
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [copied, setCopied] = useState('');
+  const selectionKey = cameraItemIds?.slice().sort((a,b)=>a-b).join(',') || '';
+  const requestKey = selectionKey ? `filmiliar:bundle:${selectionKey}:${startDate}:${endDate}:${startTime}:${endTime}` : `filmiliar:payment:${cameraItemId}:${startDate}:${endDate}:${startTime}:${endTime}`;
 
   useEffect(() => {
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -56,18 +61,24 @@ export function PaymentQrModal({ cameraItemId, startDate, endDate, quoteHash, te
     const load = async () => {
       setLoading(true); setError('');
       try {
-        const active = await apiRequest<{ data: PaymentView | null }>(`/api/payment/active/${cameraItemId}?${new URLSearchParams({ startDate, endDate, startTime, endTime })}`);
+        if (existingBookingId) {
+          const current = await apiRequest<{data:PaymentView}>(`/api/payment/booking/${existingBookingId}`);
+          if (!cancelled) setPayment(current.data);
+          return;
+        }
+        const query = new URLSearchParams({ startDate, endDate, startTime, endTime, ...(selectionKey ? {unitIds:selectionKey} : {}) });
+        const active = await apiRequest<{ data: PaymentView | null }>(selectionKey ? `/api/payment/bundle/active?${query}` : `/api/payment/active/${cameraItemId}?${query}`);
         if (cancelled) return;
         if (active.data) { setPayment(active.data); return; }
-        const key = `filmiliar:payment:${cameraItemId}:${startDate}:${endDate}:${startTime}:${endTime}`;
+        const key = requestKey;
         let clientRequestId = sessionStorage.getItem(key);
         if (!clientRequestId) {
           clientRequestId = crypto.randomUUID();
           sessionStorage.setItem(key, clientRequestId);
         }
-        const created = await apiRequest<{ data: PaymentView }>('/api/payment/create', {
+        const created = await apiRequest<{ data: PaymentView }>(selectionKey ? '/api/payment/bundle/create' : '/api/payment/create', {
           method: 'POST',
-          body: JSON.stringify({ cameraItemId, startDate, endDate, startTime, endTime, clientRequestId, quoteHash, termsAccepted })
+          body: JSON.stringify({ ...(selectionKey ? {cameraItemIds:selectionKey.split(',').map(Number)} : {cameraItemId}), startDate, endDate, startTime, endTime, clientRequestId, quoteHash, termsAccepted })
         });
         if (!cancelled) setPayment(created.data);
       } catch (cause) {
@@ -76,7 +87,7 @@ export function PaymentQrModal({ cameraItemId, startDate, endDate, quoteHash, te
     };
     void load();
     return () => { cancelled = true; };
-  }, [cameraItemId, startDate, endDate, startTime, endTime, quoteHash, termsAccepted]);
+  }, [cameraItemId, selectionKey, existingBookingId, startDate, endDate, startTime, endTime, quoteHash, termsAccepted, requestKey]);
 
   useEffect(() => {
     if (!payment || (payment.paymentStatus !== 'CREATING' && payment.paymentStatus !== 'WAITING')) return;
@@ -151,12 +162,12 @@ export function PaymentQrModal({ cameraItemId, startDate, endDate, quoteHash, te
                 <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-400" />
                 <h3 className="text-xl font-bold text-white">Đã xác nhận thanh toán</h3>
                 <p className="text-sm leading-6 text-slate-300">Lịch thuê đã được giữ. Theo dõi bàn giao và hoàn cọc trong chi tiết đơn.</p>
-                <Link to={`/tai-khoan/don-thue/${payment.bookingId}`} onClick={onClose} className="inline-flex min-h-11 items-center rounded-lg bg-film-warm px-4 font-semibold text-film-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-film-warm">Xem đơn thuê</Link>
+                <Link to={payment.bundleId ? `/tai-khoan/bo-thue/${payment.bundleId}` : `/tai-khoan/don-thue/${payment.bookingId}`} onClick={()=>{onClose();onComplete?.();}} className="inline-flex min-h-11 items-center rounded-lg bg-film-warm px-4 font-semibold text-film-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-film-warm">Xem đơn thuê</Link>
               </div> : payment.paymentStatus === 'FAILED' ? <div className="space-y-3 text-center">
                 <ShieldAlert className="mx-auto h-12 w-12 text-slate-300" />
                 <h3 className="text-xl font-bold text-white">Giao dịch không thành công</h3>
                 <p className="text-sm text-slate-300">ZaloPay đã trả kết quả không thanh toán. Khoảng lịch của đơn này đã được giải phóng.</p>
-                <button type="button" onClick={() => { sessionStorage.removeItem(`filmiliar:payment:${cameraItemId}:${startDate}:${endDate}`); window.location.reload(); }} className="min-h-11 rounded-lg border border-film-warm px-4 font-semibold text-film-warm hover:bg-film-warm/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-film-warm">Chọn lại và thanh toán</button>
+                <button type="button" onClick={() => { sessionStorage.removeItem(requestKey); if (existingBookingId) { onClose(); navigate('/dat-thue'); } else window.location.reload(); }} className="min-h-11 rounded-lg border border-film-warm px-4 font-semibold text-film-warm hover:bg-film-warm/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-film-warm">Chọn lại và thanh toán</button>
               </div> : payment.paymentStatus === 'REVIEW' ? <div className="space-y-3 text-center">
                 <ShieldAlert className="mx-auto h-12 w-12 text-amber-300" />
                 <h3 className="text-xl font-bold text-white">Cần đối soát giao dịch</h3>
@@ -186,7 +197,7 @@ export function PaymentQrModal({ cameraItemId, startDate, endDate, quoteHash, te
               {!sameDates && <p role="alert" className="rounded-lg border border-amber-400/40 bg-amber-400/10 p-3 text-sm text-amber-200">Thông tin dưới đây là giao dịch đã lưu trước đó.</p>}
               <dl className="space-y-2 text-sm">
                 <div className="flex justify-between gap-3"><dt className="text-slate-400">Thiết bị</dt><dd className="text-right text-white">{payment.cameraName}</dd></div>
-                <div className="flex justify-between gap-3"><dt className="text-slate-400">Số serial</dt><dd className="break-all text-right font-mono text-white">{payment.serialNumber}</dd></div>
+                {payment.bundleId ? <div className="border-t border-film-border pt-3"><dt className="text-slate-400">Thiết bị trong bộ</dt><dd><ul className="mt-2 space-y-2">{payment.items?.map(item=><li key={item.bookingId} className="text-white"><span className="block">{item.name}</span><span className="break-all font-mono text-xs text-slate-400">{item.serialNumber}</span></li>)}</ul></dd></div> : <div className="flex justify-between gap-3"><dt className="text-slate-400">Số serial</dt><dd className="break-all text-right font-mono text-white">{payment.serialNumber}</dd></div>}
                 <div className="flex justify-between gap-3"><dt className="text-slate-400">Lịch thuê</dt><dd className="text-right text-white">{payment.pickupAt && payment.dueAt ? `${new Date(payment.pickupAt).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',dateStyle:'short',timeStyle:'short'})} – ${new Date(payment.dueAt).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',dateStyle:'short',timeStyle:'short'})}` : `${payment.startDate} – ${payment.endDate}`}</dd></div>
                 <div className="flex justify-between gap-3"><dt className="text-slate-400">Tiền thuê ({payment.totalDays} ngày)</dt><dd className="text-right text-white">{formatVnd(payment.rentalFee)}</dd></div>
                 <div className="flex justify-between gap-3"><dt className="text-slate-400">Cọc thiết bị</dt><dd className="text-right text-white">{formatVnd(payment.depositAmount)}</dd></div>

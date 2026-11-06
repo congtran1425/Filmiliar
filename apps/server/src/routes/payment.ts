@@ -41,6 +41,14 @@ export function registerPaymentRoutes(app: Express, prisma: PrismaClient, requir
     res.json({ success: true, sandboxEnabled: enabled });
   });
 
+  app.get('/api/payment/booking/:bookingId', requireUser, pollLimit, async (req: Request, res: Response) => {
+    if (!z.string().uuid().safeParse(req.params.bookingId).success) return res.status(400).json({success:false,message:'Mã đơn không hợp lệ'});
+    try {
+      const ownerId = res.locals.user.role === 'ADMIN' ? (await prisma.rentalBooking.findUnique({where:{id:req.params.bookingId},select:{userId:true}}))?.userId || res.locals.user.id : res.locals.user.id;
+      res.json({success:true,data:await flow.getForUser(ownerId,req.params.bookingId)});
+    } catch(error) { sendError(error,res); }
+  });
+
   app.get('/api/payment/active/:unitId', requireUser, requireSandbox, async (req: Request, res: Response) => {
     const unitId = Number(req.params.unitId);
     if (!Number.isSafeInteger(unitId) || unitId <= 0) return res.status(400).json({ success: false, message: 'Mã máy không hợp lệ' });

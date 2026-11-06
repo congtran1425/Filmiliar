@@ -1,13 +1,15 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Camera, Trash2, X } from 'lucide-react';
 import { formatVnd } from '../lib/catalog';
 import { useCart } from '../lib/CartContext';
 import { getMount, isLens, rentalDays } from '../lib/rentalCart';
+import { todayVN, addDays } from '../lib/rental';
 
 export function CartDrawer() {
   const cart = useCart();
+  const navigate = useNavigate();
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!cart.isOpen) return;
@@ -29,9 +31,9 @@ export function CartDrawer() {
     return () => { document.body.style.overflow = previous; window.removeEventListener('keydown', onKeyDown); priorFocus?.focus(); };
   }, [cart.isOpen]);
   if (!cart.isOpen) return null;
-  const days = rentalDays(cart.start, cart.end);
+  const days = rentalDays(cart.start, cart.end, cart.startTime, cart.endTime);
   const daily = cart.items.reduce((sum, item) => sum + item.rentPrice, 0);
-  const today = new Date().toLocaleDateString('en-CA');
+  const today = todayVN();
   return createPortal(
     <div className="fixed inset-0 z-[70] flex justify-end bg-film-dark/70" onMouseDown={(event) => { if (event.target === event.currentTarget) cart.closeCart(); }}>
       <section role="dialog" aria-modal="true" aria-labelledby="cart-title" className="flex h-full w-full max-w-[480px] flex-col bg-film-paper text-film-ink shadow-2xl">
@@ -40,7 +42,7 @@ export function CartDrawer() {
           <button ref={closeRef} type="button" onClick={cart.closeCart} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-film-ink/20" aria-label="Đóng giỏ thiết bị"><X size={20} /></button>
         </div>
         <div className="flex-1 overflow-y-auto px-5 py-6 sm:px-7">
-          {cart.loading ? <p role="status">Đang tải thiết bị...</p> : cart.items.length === 0 ? (
+          {cart.loading ? <p role="status">Đang tải thiết bị...</p> : cart.error ? <div role="alert"><p>{cart.error}</p><button type="button" onClick={cart.refresh} className="mt-3 min-h-11 text-film-teal underline">Thử lại</button></div> : cart.items.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-film-ink/25 bg-film-paperRaised p-7 text-center"><Camera className="mx-auto mb-4 text-film-teal" size={32} /><p className="font-semibold">Chưa có thiết bị trong bộ.</p><Link onClick={cart.closeCart} to="/san-pham?mode=rent" className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg bg-film-teal px-5 text-sm font-semibold text-white">Xem thiết bị <ArrowRight size={16}/></Link></div>
           ) : <div className="space-y-3">{cart.items.map((item) => <article key={item.slug} className="flex gap-3 rounded-xl border border-film-ink/15 bg-film-paperRaised p-3">
             <img src={item.thumbnailUrl || '/filmiliar-icon.png'} alt="" className="h-20 w-20 shrink-0 rounded-lg bg-film-paper object-contain" />
@@ -49,11 +51,12 @@ export function CartDrawer() {
           </article>)}</div>}
           {cart.items.length > 0 && <div className="mt-7 space-y-4 border-t border-film-ink/15 pt-6">
             <div><h3 className="font-bold">Thời gian dự kiến</h3></div>
-            <div className="grid grid-cols-2 gap-3"><label className="text-xs font-semibold">Ngày nhận<input type="date" min={today} value={cart.start} onChange={(event) => cart.setDates(event.target.value, cart.end)} className="mt-2 block w-full min-w-0 rounded-lg border border-film-ink/20 bg-white p-2.5 text-base" /></label><label className="text-xs font-semibold">Ngày trả<input type="date" min={cart.start || today} value={cart.end} onChange={(event) => cart.setDates(cart.start, event.target.value)} className="mt-2 block w-full min-w-0 rounded-lg border border-film-ink/20 bg-white p-2.5 text-base" /></label></div>
+            <div className="grid grid-cols-2 gap-3"><label className="text-xs font-semibold">Ngày nhận<input type="date" min={today} max={addDays(today,90)} value={cart.start} onChange={(event) => cart.setDates(event.target.value, cart.end > event.target.value ? cart.end : '')} className="mt-2 block w-full min-w-0 rounded-lg border border-film-ink/20 bg-white p-2.5 text-base" /></label><label className="text-xs font-semibold">Ngày trả<input type="date" min={cart.start ? addDays(cart.start,1) : addDays(today,1)} max={cart.start ? addDays(cart.start,30) : undefined} value={cart.end} onChange={(event) => cart.setDates(cart.start, event.target.value)} className="mt-2 block w-full min-w-0 rounded-lg border border-film-ink/20 bg-white p-2.5 text-base" /></label></div>
             <div className="space-y-2 rounded-xl bg-white p-4 text-sm"><div className="flex justify-between gap-3"><span>Giá thuê / ngày</span><strong>{formatVnd(daily)}</strong></div><div className="flex justify-between gap-3"><span>Số ngày</span><strong>{days > 0 ? days : 'Chưa chọn hợp lệ'}</strong></div><div className="flex justify-between gap-3 border-t border-film-ink/10 pt-2 font-bold"><span>Tiền thuê dự kiến</span><span>{days > 0 ? formatVnd(daily * days) : '—'}</span></div></div>
 
           </div>}
         </div>
+        {cart.count > 0 && <div className="shrink-0 border-t border-film-ink/15 px-5 py-4 pb-safe sm:px-7"><button type="button" disabled={cart.loading || !!cart.error || !cart.items.length} onClick={()=>{cart.closeCart();navigate('/dat-thue');}} className="flex min-h-12 w-full items-center justify-between gap-3 rounded-xl bg-film-teal px-5 text-sm font-bold text-white hover:bg-film-ink disabled:opacity-40">Tiếp tục đặt thuê <ArrowRight size={18} aria-hidden="true"/></button></div>}
       </section>
     </div>, document.body
   );

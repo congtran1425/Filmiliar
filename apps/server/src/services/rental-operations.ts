@@ -13,6 +13,7 @@ const bookingInclude = {
   user: { select: { id: true, fullName: true, email: true, phone: true } },
   cameraItem: { include: { product: { select: { modelName: true, slug: true, brand: true } } } },
   paymentAttempt: true,
+  bundle: { include: { bookings: true } },
   refunds: { orderBy: { submittedAt: 'desc' as const }, take: 10 },
   events: { orderBy: { createdAt: 'asc' as const } }
 } satisfies Prisma.RentalBookingInclude;
@@ -20,6 +21,12 @@ type Booking = Prisma.RentalBookingGetPayload<{ include: typeof bookingInclude }
 
 function assertAdmin(actor: RentalActor) { if (actor.role !== 'ADMIN') throw new PaymentFlowError('Không có quyền thực hiện thao tác này', 403); }
 function snapshot(booking: Booking) { return (booking.policySnapshot || {}) as { cancellationRefund?: string; version?: number; terms?: string }; }
+
+async function lockFinancialBookings(tx: Prisma.TransactionClient, bookingId: string) {
+  const booking = await tx.rentalBooking.findUniqueOrThrow({ where: { id: bookingId }, select: { bundleId: true } });
+  const members = booking.bundleId ? await tx.rentalBooking.findMany({ where: { bundleId: booking.bundleId }, select: { id: true } }) : [{ id: bookingId }];
+  for (const id of members.map(member => member.id).sort()) await lockBooking(tx, id);
+}
 
 function presentBooking(booking: Booking) {
   return { ...booking, suggestedLateFee: suggestedLateFee(booking.dueAt, booking.returnedAt, booking.dailyRate), cancellationRefundAmount: cancellationRefundAmount(booking) };
@@ -36,8 +43,9 @@ export class RentalOperations {
 
   private async operate<T extends OperationInput>(bookingId: string, actor: RentalActor, action: string, input: T,
     apply: (tx: Prisma.TransactionClient, booking: Booking) => Promise<void>) {
-    const initial = await this.prisma.rentalBooking.findUnique({ where: { id: bookingId }, select: { cameraItemId: true, userId: true } });
+    const initial = await this.prisma.rentalBooking.findUnique({ where: { id: bookingId }, select: { cameraItemId: true, userId: true, bundleId: true } });
     if (!initial || (actor.role !== 'ADMIN' && initial.userId !== actor.id)) throw new PaymentFlowError('Không tìm thấy đơn thuê', 404);
+    if (initial.bundleId) throw new PaymentFlowError('Thực hiện thao tác trong hồ sơ cả bộ thuê', 409);
     const payloadHash = crypto.createHash('sha256').update(JSON.stringify(input)).digest('hex');
     return this.prisma.$transaction(async tx => {
       await lockUnit(tx, initial.cameraItemId);
@@ -140,9 +148,19 @@ export class RentalOperations {
     });
   }
 
-  async requestRefund(bookingId: string, actor: RentalActor, clientRequestId: string) {
+  async requestRefund(bookingId: string, actor: RentalActor, clientRequestId: string, allowBundle = false) {
+    const initial = await this.prisma.rentalBooking.findUnique({ where: { id: bookingId }, include: { bundle: { include: { bookings: { include: { paymentAttempt: { select: { id: true } } } } } } } });
+    if (!initial || (actor.role !== 'ADMIN' && initial.userId !== actor.id)) throw new PaymentFlowError('Không tìm thấy đơn thuê', 404);
+    if (initial.bundleId && !allowBundle) throw new PaymentFlowError('Thực hiện hoàn tiền trong hồ sơ cả bộ thuê', 409);
+    const members = initial.bundle?.bookings || [initial];
+    if (initial.bundleId) {
+      const primary = initial.bundle!.bookings.find(b => b.paymentAttempt);
+      if (!primary) throw new PaymentFlowError('Bộ thuê chưa có giao dịch để đối soát', 409);
+      bookingId = primary.id;
+    }
+    const memberIds = members.map(b => b.id).sort();
     const refund = await this.prisma.$transaction(async tx => {
-      await lockBooking(tx, bookingId);
+      for (const id of memberIds) await lockBooking(tx, id);
       const booking = await tx.rentalBooking.findUnique({ where: { id: bookingId }, include: bookingInclude });
       if (!booking || (actor.role !== 'ADMIN' && booking.userId !== actor.id)) throw new PaymentFlowError('Không tìm thấy đơn thuê', 404);
       const existing = await tx.refundAttempt.findUnique({ where: { bookingId_clientRequestId: { bookingId, clientRequestId } } });
@@ -152,16 +170,15 @@ export class RentalOperations {
       const payment = booking.paymentAttempt;
       if (payment?.status !== PaymentAttemptStatus.PAID || !payment.providerTxnId || !/^\d+$/.test(payment.providerTxnId)) throw new PaymentFlowError('Chưa có giao dịch ZaloPay đã thanh toán hợp lệ để hoàn', 409);
       if (payment.merchantAppId !== this.gateway.appId) throw new PaymentFlowError('Merchant của giao dịch không khớp cấu hình hiện tại; cần đối soát', 409);
-      const cancelling = booking.status === BookingStatus.CANCELLED && !booking.handoverAt;
-      if (!cancelling && (booking.status !== BookingStatus.COMPLETED || !booking.inspectedAt)) throw new PaymentFlowError('Cần nghiệm thu hoặc hủy trước bàn giao trước khi hoàn tiền', 409);
-      if (!cancelling && booking.deductionAmount > 0 && booking.deductionDecision !== 'ACCEPTED') throw new PaymentFlowError('Cần khách đồng ý khoản khấu trừ trước khi hoàn phần còn lại', 409);
-      const amount = cancelling ? cancellationRefundAmount(booking) : booking.depositAmount - booking.deductionAmount;
+      const financialMembers = booking.bundle?.bookings || [booking];
+      const cancelling = financialMembers.every(b => b.status === BookingStatus.CANCELLED && !b.handoverAt);
+      if (!cancelling && financialMembers.some(b => b.status !== BookingStatus.COMPLETED || !b.inspectedAt)) throw new PaymentFlowError('Cần nghiệm thu hoặc hủy trước bàn giao trước khi hoàn tiền', 409);
+      if (!cancelling && financialMembers.some(b=>b.deductionAmount>0 && b.deductionDecision!=='ACCEPTED')) throw new PaymentFlowError('Cần khách đồng ý khoản khấu trừ trước khi hoàn phần còn lại', 409);
+      const amount = financialMembers.reduce((sum,b)=>sum+(cancelling ? cancellationRefundAmount(b) : b.depositAmount-b.deductionAmount),0);
       if (!Number.isSafeInteger(amount) || amount < 0 || amount > payment.amount) throw new PaymentFlowError('Số tiền hoàn không hợp lệ', 409);
-      if (amount === 0) {
-        if (booking.depositStatus !== DepositStatus.DEDUCTED && booking.depositStatus !== DepositStatus.REFUNDED) {
-          await tx.rentalBooking.update({ where: { id: bookingId }, data: { depositStatus: booking.deductionAmount ? DepositStatus.DEDUCTED : DepositStatus.REFUNDED } });
-          await tx.rentalEvent.create({ data: { bookingId, actorId: actor.id, action: 'DEPOSIT_SETTLED', detail: 'Không phát sinh khoản hoàn: không thu cọc hoặc khoản khấu trừ đã được khách chấp thuận.' } });
-        }
+      if(amount===0){
+        for(const member of financialMembers)if(![DepositStatus.DEDUCTED,DepositStatus.REFUNDED].includes(member.depositStatus as never))await tx.rentalBooking.update({where:{id:member.id},data:{depositStatus:member.deductionAmount?DepositStatus.DEDUCTED:DepositStatus.REFUNDED}});
+        await tx.rentalEvent.create({data:{bookingId,actorId:actor.id,action:'DEPOSIT_SETTLED',detail:'Không phát sinh khoản hoàn sau khi đối chiếu cọc và khấu trừ.'}});
         return null;
       }
       const created = await tx.refundAttempt.create({ data: {
@@ -171,7 +188,7 @@ export class RentalOperations {
         purpose: cancelling ? 'CANCELLATION' : 'DEPOSIT', description: cancelling ? `Filmiliar huy don ${booking.bookingCode}` : `Filmiliar hoan coc ${booking.bookingCode}`,
         requestedById: actor.id
       } });
-      await tx.rentalBooking.update({ where: { id: bookingId }, data: { depositStatus: DepositStatus.REFUND_PENDING } });
+      await tx.rentalBooking.updateMany({ where: { id: { in: memberIds } }, data: { depositStatus: DepositStatus.REFUND_PENDING } });
       await tx.rentalEvent.create({ data: { bookingId, actorId: actor.id, action: 'REFUND_REQUESTED', detail: `Yêu cầu hoàn ${amount.toLocaleString('vi-VN')} đ về giao dịch ban đầu.` } });
       return created;
     });
@@ -183,14 +200,14 @@ export class RentalOperations {
           const response = await this.gateway.createRefund({ mRefundId: refund.mRefundId, providerTxnId: refund.providerTxnId, amount: refund.amount, description: refund.description, timestamp: refund.submittedAt.getTime() });
           const refused = response.return_code === 2 && [-14, -13, -101, -401, -402, -32].includes(response.sub_return_code ?? 0);
           await this.prisma.$transaction(async tx => {
-            await lockBooking(tx, bookingId);
+            await lockFinancialBookings(tx, bookingId);
             const changed = await tx.refundAttempt.updateMany({ where: { id: refund.id, status: { in: [RefundStatus.CREATING, RefundStatus.PENDING] } }, data: {
               status: refused ? RefundStatus.FAILED : RefundStatus.PENDING,
               ...(refused ? { activeBookingId: null } : {}), providerRefundId: response.refund_id,
               lastReturnCode: response.return_code, lastSubReturnCode: response.sub_return_code,
               reviewReason: refused ? `PROVIDER_REJECTED_${response.sub_return_code}` : null
             } });
-            if (changed.count === 1 && refused) await tx.rentalBooking.update({ where: { id: bookingId }, data: { depositStatus: DepositStatus.HELD } });
+            if (changed.count === 1 && refused) await tx.rentalBooking.updateMany({ where: { id: { in: memberIds } }, data: { depositStatus: DepositStatus.HELD } });
           });
         } catch {
           await this.prisma.refundAttempt.updateMany({ where: { id: refund.id, status: RefundStatus.CREATING }, data: { reviewReason: 'CREATE_RESULT_UNKNOWN' } });
@@ -217,7 +234,7 @@ export class RentalOperations {
     let result;
     try { result = await this.gateway.queryRefund(refund.mRefundId); } catch { return; }
     await this.prisma.$transaction(async tx => {
-      await lockBooking(tx, refund.bookingId);
+      await lockFinancialBookings(tx, refund.bookingId);
       const current = await tx.refundAttempt.findUnique({ where: { id: refundId } });
       if (!current || current.status === RefundStatus.SUCCEEDED || current.status === RefundStatus.FAILED) return;
       const completed = result.return_code === 1;
@@ -231,11 +248,12 @@ export class RentalOperations {
         reviewReason: failed ? `PROVIDER_REJECTED_${result.sub_return_code}` : stale ? 'UNRESOLVED_24H' : current.reviewReason
       } });
       if (completed) {
-        const booking = await tx.rentalBooking.findUniqueOrThrow({ where: { id: current.bookingId } });
-        await tx.rentalBooking.update({ where: { id: current.bookingId }, data: { depositStatus: booking.deductionAmount > 0 ? DepositStatus.DEDUCTED : DepositStatus.REFUNDED } });
+        const booking = await tx.rentalBooking.findUniqueOrThrow({ where: { id: current.bookingId }, include: { bundle: { include: { bookings: true } } } });
+        for (const member of booking.bundle?.bookings || [booking]) await tx.rentalBooking.update({ where: { id: member.id }, data: { depositStatus: member.deductionAmount > 0 ? DepositStatus.DEDUCTED : DepositStatus.REFUNDED } });
         await tx.rentalEvent.create({ data: { bookingId: current.bookingId, action: 'REFUND_CONFIRMED', detail: `ZaloPay xác nhận hoàn ${current.amount.toLocaleString('vi-VN')} đ. Mã ${current.mRefundId}.` } });
       } else if (failed) {
-        await tx.rentalBooking.update({ where: { id: current.bookingId }, data: { depositStatus: DepositStatus.HELD } });
+        const booking=await tx.rentalBooking.findUniqueOrThrow({where:{id:current.bookingId},select:{bundleId:true}});
+        await tx.rentalBooking.updateMany({where:booking.bundleId?{bundleId:booking.bundleId}:{id:current.bookingId},data:{depositStatus:DepositStatus.HELD}});
       }
     });
   }
@@ -244,7 +262,7 @@ export class RentalOperations {
     const pending = await this.prisma.refundAttempt.findMany({ where: { status: { in: [RefundStatus.CREATING, RefundStatus.PENDING, RefundStatus.REVIEW] } }, orderBy: { lastQueriedAt: 'asc' }, take: 20, select: { id: true, status: true, lastQueriedAt: true, bookingId: true, requestedById: true, clientRequestId: true } });
     for (const refund of pending) {
       if (refund.status === RefundStatus.CREATING && !refund.lastQueriedAt) {
-        await this.requestRefund(refund.bookingId, { id: refund.requestedById, role: 'ADMIN' }, refund.clientRequestId);
+        await this.requestRefund(refund.bookingId, { id: refund.requestedById, role: 'ADMIN' }, refund.clientRequestId, true);
       } else await this.reconcileRefund(refund.id);
     }
   }

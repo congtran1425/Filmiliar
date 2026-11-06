@@ -14,7 +14,9 @@ export type Refund = { id: string; mRefundId: string; providerRefundId: string |
   status: 'CREATING' | 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'REVIEW'; activeBookingId: string | null;
   lastSubReturnCode: number | null; reviewReason: string | null; submittedAt: string; confirmedAt: string | null };
 export type RentalBooking = {
-  id: string; bookingCode: string; userId: string; status: string; depositStatus: string; startDate: string; endDate: string;
+  bundleId?: string | null;
+  bundleSummary?: {id:string;code:string;count:number;totalRentalFee:number;depositAmount:number;status:string;depositStatus?:string;deductionAmount?:number} | null;
+  id: string; bookingCode: string; userId: string; cameraItemId: number; status: string; depositStatus: string; startDate: string; endDate: string;
   totalDays: number; totalRentalFee: number; depositAmount: number; handoverAt: string | null; returnedAt: string | null; inspectedAt: string | null;
   pickupAt: string | null; dueAt: string | null; cancelledAt: string | null; rescheduleCount: number; suggestedLateFee: number; cancellationRefundAmount: number;
   handoverRecord: { accessories: string; condition: string; receiptReference: string; shutterCount: number | null; note: string } | null;
