@@ -52,7 +52,7 @@ jobs:
       - name: Validate deployment shell syntax
         run: bash -n deploy/ci-deploy.sh deploy/ci-ssh-command.sh deploy/install-ci-access.sh deploy/deploy-shared-vps.sh deploy/backup-db.sh
       - name: Unit and database integration tests
-        run: node --test apps/server/tests/*.test.mjs
+        run: node --test --test-concurrency=1 apps/server/tests/*.test.mjs
 
   publish:
     name: Publish API image

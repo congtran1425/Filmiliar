@@ -160,6 +160,7 @@ model CameraItem {
   scratchNotes       String          // Ghi chú vết trầy xước có sẵn
   depositAmount      Int             // Mức tiền đặt cọc (VND)
   status             ItemStatus      @default(AVAILABLE) // AVAILABLE, RENTED, MAINTENANCE, SOLD
+  passport           Json?
   
   rentalBookings     RentalBooking[]
   allocations        RentalAllocation[]
@@ -198,6 +199,11 @@ model RentalBooking {
   policySnapshot       Json?
   returnBufferDays      Int           @default(0)
   termsAcceptedAt       DateTime?
+  pickupAt              DateTime?
+  dueAt                 DateTime?
+  cancelledAt           DateTime?
+  cancellationCause     String?
+  rescheduleCount       Int            @default(0)
   handoverAt            DateTime?
   handoverRecord        Json?
   returnedAt            DateTime?
@@ -250,6 +256,7 @@ model RentalPolicy {
   returnBufferDays     Int      @default(1)
   cancellationRefund   String   @default("FULL_PAYMENT")
   terms                String
+  rules                Json?
   updatedById          String?
   updatedAt            DateTime @updatedAt
 }
@@ -325,7 +332,7 @@ model Order {
   status            OrderStatus  @default(PENDING_PAYMENT)
   paymentMethod     String       @default("BANK_TRANSFER")
   
-  warrantyMonths    Int          @default(6)
+  warrantyMonths    Int          @default(3)
   warrantyExpiresAt DateTime
   
   shippingAddress   String?

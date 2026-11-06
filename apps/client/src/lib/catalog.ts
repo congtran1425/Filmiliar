@@ -24,6 +24,14 @@ export interface CameraUnit {
   sensorInspection: string | null;
   opticsCondition: string;
   scratchNotes: string;
+  passport?: TechnicalPassport | null;
+}
+
+export interface TechnicalPassport {
+  schemaVersion: number; kind: string; source: string; assetCode: string; kit: string;
+  acquiredOn: string; supplier: string; referenceValue: number; depositPercent: number; overallPercent: number;
+  battery: { model: string; healthPercent: number }; accessories: string[]; repairHistory: string[];
+  parts: { name: string; percent: number; notes: string }[]; checks: string[];
 }
 
 export interface ProductDetail extends ProductSummary {

@@ -233,6 +233,7 @@ app.get('/api/passport/:serial', async (req: Request, res: Response) => {
         opticsCondition: unit.opticsCondition,
         scratchNotes: unit.scratchNotes,
         depositAmount: unit.depositAmount,
+        passport: unit.passport,
         status: unit.status
       }
     }));
@@ -1070,7 +1071,7 @@ app.patch('/api/admin/orders/:id/status', requireUser, requireAdmin, requireAppr
     }
 
     const nextStatus = parsed.data.status;
-    const months = parsed.data.warrantyMonths ?? order.warrantyMonths ?? 6;
+    const months = parsed.data.warrantyMonths ?? order.warrantyMonths ?? 3;
     const warrantyExpiry = new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000);
 
     let targetCameraStatus: ItemStatus | undefined;

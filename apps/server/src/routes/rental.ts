@@ -16,7 +16,7 @@ const inspection = operation.extend({ shutterCount: count, condition: z.string()
 const decision = operation.extend({ accept: z.boolean(), expectedAmount: z.number().int().min(0), inspectedAt: z.string().datetime() }).strict();
 const refundInput = z.object({ clientRequestId: z.string().uuid() }).strict();
 const policyInput = z.object({ version: z.number().int().positive(), returnBufferDays: z.number().int().min(0).max(3),
-  cancellationRefund: z.enum(['FULL_PAYMENT', 'DEPOSIT_ONLY']), terms: z.string().trim().min(40).max(8000) }).strict();
+  cancellationRefund: z.enum(['FULL_PAYMENT', 'DEPOSIT_ONLY', 'TIMED']), terms: z.string().trim().min(40).max(8000) }).strict();
 
 function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
@@ -48,12 +48,12 @@ export function registerRentalRoutes(app: Express, prisma: PrismaClient, require
   const bookingId = (req: Request) => parse(z.string().uuid(), req.params.id);
 
   app.get('/api/rental-policy', handle(async () => {
-    const { id, version, returnBufferDays, cancellationRefund, terms, updatedAt } = await getRentalPolicy(prisma);
-    return { id, version, returnBufferDays, cancellationRefund, terms, updatedAt };
+    const { id, version, returnBufferDays, cancellationRefund, terms, rules, updatedAt } = await getRentalPolicy(prisma);
+    return { id, version, returnBufferDays, cancellationRefund, terms, rules, updatedAt };
   }));
   app.get('/api/rental/quote/:unitId', handle(async req => {
-    const dates = parse(z.object({ startDate: z.string(), endDate: z.string() }).strict(), req.query);
-    return (await quoteRental(prisma, unitId(req), dates.startDate, dates.endDate)).view;
+    const dates = parse(z.object({ startDate: z.string(), endDate: z.string(), startTime: z.string().optional(), endTime: z.string().optional() }).strict(), req.query);
+    return (await quoteRental(prisma, unitId(req), dates.startDate, dates.endDate, dates.startTime, dates.endTime)).view;
   }));
   app.get('/api/rental/calendar/:unitId', handle(async req => {
     const from = typeof req.query.from === 'string' ? req.query.from : vietnamDate();
@@ -130,10 +130,12 @@ export function registerRentalRoutes(app: Express, prisma: PrismaClient, require
     return input.accept && gateway.isConfigured() ? ops.requestRefund(booking.id, res.locals.user, input.requestId) : booking;
   }));
   app.post('/api/rental/bookings/:id/cancel', requireUser, financialLimit, handle(async (req, res) => {
-    const input = parse(operation.strict(), req.body);
+    const input = parse(operation.extend({ storeFault: z.boolean().optional() }).strict(), req.body);
     const booking = await ops.cancel(bookingId(req), res.locals.user, input);
     return booking.paymentAttempt?.status === 'PAID' && gateway.isConfigured() ? ops.requestRefund(booking.id, res.locals.user, input.requestId) : booking;
   }));
+  app.post('/api/rental/bookings/:id/reschedule', requireUser, financialLimit, handle(async (req, res) =>
+    ops.reschedule(bookingId(req), res.locals.user, parse(operation.extend({ startDate: z.string(), endDate: z.string(), startTime: z.string().optional(), endTime: z.string().optional() }).strict(), req.body))));
   app.post('/api/rental/bookings/:id/refund', requireUser, providerReady, financialLimit, handle(async (req, res) => ops.requestRefund(bookingId(req), res.locals.user, parse(refundInput, req.body).clientRequestId)));
   app.post('/api/rental/bookings/:id/check-refund', requireUser, providerReady, financialLimit, handle(async (req, res) => {
     const booking = await ops.detail(bookingId(req), res.locals.user);

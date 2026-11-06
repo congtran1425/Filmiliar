@@ -12,11 +12,13 @@ type PaymentView = {
   bookingId: string; bookingCode: string; paymentStatus: PaymentStatus; bookingStatus: string;
   appTransId: string; qrCode: string | null; orderUrl: string | null; expiresAt: string;
   cameraName: string; serialNumber: string; startDate: string; endDate: string;
+  pickupAt?: string | null; dueAt?: string | null;
   totalDays: number; rentalFee: number; depositAmount: number; totalAmount: number; sandbox: true;
 };
 
-export function PaymentQrModal({ cameraItemId, startDate, endDate, quoteHash, termsAccepted, onClose }: {
+export function PaymentQrModal({ cameraItemId, startDate, endDate, quoteHash, termsAccepted, onClose, startTime = '08:00', endTime = '08:00' }: {
   cameraItemId: number; startDate: string; endDate: string; quoteHash: string; termsAccepted: boolean; onClose: () => void;
+  startTime?: string; endTime?: string;
 }) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -54,10 +56,10 @@ export function PaymentQrModal({ cameraItemId, startDate, endDate, quoteHash, te
     const load = async () => {
       setLoading(true); setError('');
       try {
-        const active = await apiRequest<{ data: PaymentView | null }>(`/api/payment/active/${cameraItemId}?${new URLSearchParams({ startDate, endDate })}`);
+        const active = await apiRequest<{ data: PaymentView | null }>(`/api/payment/active/${cameraItemId}?${new URLSearchParams({ startDate, endDate, startTime, endTime })}`);
         if (cancelled) return;
         if (active.data) { setPayment(active.data); return; }
-        const key = `filmiliar:payment:${cameraItemId}:${startDate}:${endDate}`;
+        const key = `filmiliar:payment:${cameraItemId}:${startDate}:${endDate}:${startTime}:${endTime}`;
         let clientRequestId = sessionStorage.getItem(key);
         if (!clientRequestId) {
           clientRequestId = crypto.randomUUID();
@@ -65,7 +67,7 @@ export function PaymentQrModal({ cameraItemId, startDate, endDate, quoteHash, te
         }
         const created = await apiRequest<{ data: PaymentView }>('/api/payment/create', {
           method: 'POST',
-          body: JSON.stringify({ cameraItemId, startDate, endDate, clientRequestId, quoteHash, termsAccepted })
+          body: JSON.stringify({ cameraItemId, startDate, endDate, startTime, endTime, clientRequestId, quoteHash, termsAccepted })
         });
         if (!cancelled) setPayment(created.data);
       } catch (cause) {
@@ -74,7 +76,7 @@ export function PaymentQrModal({ cameraItemId, startDate, endDate, quoteHash, te
     };
     void load();
     return () => { cancelled = true; };
-  }, [cameraItemId, startDate, endDate, quoteHash, termsAccepted]);
+  }, [cameraItemId, startDate, endDate, startTime, endTime, quoteHash, termsAccepted]);
 
   useEffect(() => {
     if (!payment || (payment.paymentStatus !== 'CREATING' && payment.paymentStatus !== 'WAITING')) return;
@@ -185,7 +187,7 @@ export function PaymentQrModal({ cameraItemId, startDate, endDate, quoteHash, te
               <dl className="space-y-2 text-sm">
                 <div className="flex justify-between gap-3"><dt className="text-slate-400">Thiết bị</dt><dd className="text-right text-white">{payment.cameraName}</dd></div>
                 <div className="flex justify-between gap-3"><dt className="text-slate-400">Số serial</dt><dd className="break-all text-right font-mono text-white">{payment.serialNumber}</dd></div>
-                <div className="flex justify-between gap-3"><dt className="text-slate-400">Ngày thuê</dt><dd className="text-right text-white">{payment.startDate} – {payment.endDate}</dd></div>
+                <div className="flex justify-between gap-3"><dt className="text-slate-400">Lịch thuê</dt><dd className="text-right text-white">{payment.pickupAt && payment.dueAt ? `${new Date(payment.pickupAt).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',dateStyle:'short',timeStyle:'short'})} – ${new Date(payment.dueAt).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',dateStyle:'short',timeStyle:'short'})}` : `${payment.startDate} – ${payment.endDate}`}</dd></div>
                 <div className="flex justify-between gap-3"><dt className="text-slate-400">Tiền thuê ({payment.totalDays} ngày)</dt><dd className="text-right text-white">{formatVnd(payment.rentalFee)}</dd></div>
                 <div className="flex justify-between gap-3"><dt className="text-slate-400">Cọc thiết bị</dt><dd className="text-right text-white">{formatVnd(payment.depositAmount)}</dd></div>
                 <div className="flex justify-between gap-3 border-t border-film-border pt-3 font-bold"><dt className="text-film-warm">Tổng thanh toán</dt><dd className="text-right text-film-warm">{formatVnd(payment.totalAmount)}</dd></div>

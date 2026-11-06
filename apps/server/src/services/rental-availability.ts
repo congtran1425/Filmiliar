@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { BookingStatus, ItemStatus, Prisma, PrismaClient } from '@prisma/client';
 import { DAY_MS, PaymentFlowError, dateKey, parseDay, parseRentalDates, vietnamDate } from './rental-domain.js';
+import { scheduledRental } from './approved-policy.js';
 
 type Database = PrismaClient | Prisma.TransactionClient;
 
@@ -18,15 +19,15 @@ export async function getRentalPolicy(db: Database) {
   return policy;
 }
 
-export async function quoteRental(db: Database, unitId: number, startDate: string, endDate: string) {
-  const dates = parseRentalDates(startDate, endDate);
+export async function quoteRental(db: Database, unitId: number, startDate: string, endDate: string, startTime = '08:00', endTime = '08:00', ignoreBookingId?: string) {
+  const dates = scheduledRental(startDate, endDate, startTime, endTime);
   const [unit, policy] = await Promise.all([
     db.cameraItem.findUnique({ where: { id: unitId }, include: { product: true } }), getRentalPolicy(db)
   ]);
   if (!unit || !unit.product.isPublished) throw new PaymentFlowError('Không tìm thấy chiếc máy', 404);
-  const blockedUntil = new Date(dates.end.getTime() + policy.returnBufferDays * DAY_MS);
+  const blockedUntil = new Date(dates.dueAt.getTime() + policy.returnBufferDays * DAY_MS);
   const [conflict, activePhysical, reservationCount] = await Promise.all([
-    db.rentalAllocation.findFirst({ where: { cameraItemId: unitId, releasedAt: null, startDate: { lt: blockedUntil }, endDate: { gt: dates.start } }, select: { id: true } }),
+    db.rentalAllocation.findFirst({ where: { cameraItemId: unitId, releasedAt: null, ...(ignoreBookingId ? { OR: [{ bookingId: null }, { bookingId: { not: ignoreBookingId } }] } : {}), startDate: { lt: blockedUntil }, endDate: { gt: dates.pickupAt } }, select: { id: true } }),
     db.rentalBooking.findFirst({ where: { cameraItemId: unitId, status: { in: [BookingStatus.ACTIVE_RENTAL, BookingStatus.RETURNED_PENDING_INSPECTION] } }, select: { status: true, endDate: true } }),
     db.rentalAllocation.count({ where: { cameraItemId: unitId, releasedAt: null } })
   ]);
@@ -41,9 +42,10 @@ export async function quoteRental(db: Database, unitId: number, startDate: strin
   const rentalFee = dates.days * unit.product.dailyRentalRate;
   const totalAmount = rentalFee + unit.depositAmount;
   if (unit.product.dailyRentalRate <= 0 || unit.depositAmount < 0 || !Number.isSafeInteger(totalAmount) || totalAmount > 50_000_000) unavailableReason = 'Giá thuê hoặc mức cọc cần được cập nhật';
-  const quoteHash = crypto.createHash('sha256').update(JSON.stringify([unit.id, startDate, endDate, unit.product.dailyRentalRate, unit.depositAmount, policy.version, policy.returnBufferDays])).digest('hex');
+  const quoteHash = crypto.createHash('sha256').update(JSON.stringify([unit.id, startDate, endDate, startTime, endTime, unit.product.dailyRentalRate, unit.depositAmount, policy.version, policy.returnBufferDays])).digest('hex');
   return { unit, policy, dates, view: {
     cameraItemId: unitId, serialNumber: unit.serialNumber, startDate, endDate, totalDays: dates.days,
+    startTime, endTime, pickupAt: dates.pickupAt.toISOString(), dueAt: dates.dueAt.toISOString(),
     dailyRate: unit.product.dailyRentalRate, rentalFee, depositAmount: unit.depositAmount, totalAmount,
     returnBufferDays: policy.returnBufferDays, blockedUntil: dateKey(blockedUntil), available: unavailableReason === null,
     unavailableReason, policyVersion: policy.version, terms: policy.terms, cancellationRefund: policy.cancellationRefund,

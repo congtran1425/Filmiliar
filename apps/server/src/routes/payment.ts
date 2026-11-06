@@ -10,6 +10,8 @@ const createSchema = z.object({
   cameraItemId: z.number().int().positive(),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
   clientRequestId: z.string().uuid(),
   quoteHash: z.string().regex(/^[a-f0-9]{64}$/),
   termsAccepted: z.literal(true)
@@ -45,7 +47,7 @@ export function registerPaymentRoutes(app: Express, prisma: PrismaClient, requir
     const startDate = typeof req.query.startDate === 'string' ? req.query.startDate : undefined;
     const endDate = typeof req.query.endDate === 'string' ? req.query.endDate : undefined;
     if (!!startDate !== !!endDate) return res.status(400).json({ success: false, message: 'Cần đủ ngày nhận và ngày trả' });
-    try { res.json({ success: true, data: await flow.getActiveForUnit(res.locals.user.id, unitId, startDate, endDate) }); }
+    try { res.json({ success: true, data: await flow.getActiveForUnit(res.locals.user.id, unitId, startDate, endDate, typeof req.query.startTime === 'string' ? req.query.startTime : undefined, typeof req.query.endTime === 'string' ? req.query.endTime : undefined) }); }
     catch (error) { sendError(error, res); }
   });
 

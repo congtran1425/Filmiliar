@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
 import { BookingStatus, DepositStatus, ItemStatus, PaymentAttemptStatus, Prisma, PrismaClient, RefundStatus } from '@prisma/client';
 import type { ZaloPayGateway } from './zalopay.service.js';
-import { lockBooking, lockUnit, refreshUnitStatus } from './rental-availability.js';
+import { lockBooking, lockUnit, refreshUnitStatus, quoteRental } from './rental-availability.js';
+import { cancellationRefundAmount, suggestedLateFee } from './approved-policy.js';
 import { PaymentFlowError, dateKey, parseDay, vietnamDate } from './rental-domain.js';
 
 export type RentalActor = { id: string; role: string };
@@ -20,13 +21,17 @@ type Booking = Prisma.RentalBookingGetPayload<{ include: typeof bookingInclude }
 function assertAdmin(actor: RentalActor) { if (actor.role !== 'ADMIN') throw new PaymentFlowError('Không có quyền thực hiện thao tác này', 403); }
 function snapshot(booking: Booking) { return (booking.policySnapshot || {}) as { cancellationRefund?: string; version?: number; terms?: string }; }
 
+function presentBooking(booking: Booking) {
+  return { ...booking, suggestedLateFee: suggestedLateFee(booking.dueAt, booking.returnedAt, booking.dailyRate), cancellationRefundAmount: cancellationRefundAmount(booking) };
+}
+
 export class RentalOperations {
   constructor(private readonly prisma: PrismaClient, private readonly gateway: ZaloPayGateway) {}
 
   async detail(bookingId: string, actor: RentalActor) {
     const booking = await this.prisma.rentalBooking.findUnique({ where: { id: bookingId }, include: bookingInclude });
     if (!booking || (actor.role !== 'ADMIN' && booking.userId !== actor.id)) throw new PaymentFlowError('Không tìm thấy đơn thuê', 404);
-    return booking;
+    return presentBooking(booking);
   }
 
   private async operate<T extends OperationInput>(bookingId: string, actor: RentalActor, action: string, input: T,
@@ -46,7 +51,7 @@ export class RentalOperations {
         await apply(tx, booking);
         await tx.rentalEvent.create({ data: { bookingId, actorId: actor.id, action, detail: input.note, requestId: input.requestId, payloadHash } });
       }
-      return tx.rentalBooking.findUniqueOrThrow({ where: { id: bookingId }, include: bookingInclude });
+      return presentBooking(await tx.rentalBooking.findUniqueOrThrow({ where: { id: bookingId }, include: bookingInclude }));
     }, { timeout: 15_000 });
   }
 
@@ -112,12 +117,25 @@ export class RentalOperations {
     });
   }
 
-  async cancel(bookingId: string, actor: RentalActor, input: OperationInput) {
+  async cancel(bookingId: string, actor: RentalActor, input: OperationInput & { storeFault?: boolean }) {
+    if (input.storeFault) assertAdmin(actor);
     return this.operate(bookingId, actor, 'CANCELLED', input, async (tx, booking) => {
       if (booking.handoverAt || booking.status === BookingStatus.ACTIVE_RENTAL || booking.status === BookingStatus.COMPLETED || booking.status === BookingStatus.RETURNED_PENDING_INSPECTION) throw new PaymentFlowError('Sau bàn giao cần nhận lại và nghiệm thu máy', 409);
       if (booking.status === BookingStatus.CANCELLED) return;
       if (booking.paymentAttempt && [PaymentAttemptStatus.CREATING, PaymentAttemptStatus.WAITING, PaymentAttemptStatus.REVIEW].includes(booking.paymentAttempt.status as never)) throw new PaymentFlowError('Thanh toán đang đối soát. Giữ nguyên giao dịch và kiểm tra lại trước khi hủy.', 409);
-      await tx.rentalBooking.update({ where: { id: bookingId }, data: { status: BookingStatus.CANCELLED, cancellationNote: input.note } });
+      await tx.rentalBooking.update({ where: { id: bookingId }, data: { status: BookingStatus.CANCELLED, cancellationNote: input.note, cancelledAt: new Date(), cancellationCause: input.storeFault ? 'STORE' : 'CUSTOMER' } });
+      await refreshUnitStatus(tx, booking.cameraItemId);
+    });
+  }
+
+  async reschedule(bookingId: string, actor: RentalActor, input: OperationInput & { startDate: string; endDate: string; startTime?: string; endTime?: string }) {
+    return this.operate(bookingId, actor, 'RESCHEDULED', input, async (tx, booking) => {
+      if (booking.status !== BookingStatus.CONFIRMED || booking.paymentAttempt?.status !== PaymentAttemptStatus.PAID || !booking.pickupAt) throw new PaymentFlowError('Chỉ đổi lịch của đơn đã thanh toán, chưa bàn giao', 409);
+      if (booking.rescheduleCount >= 1 || booking.pickupAt.getTime() - Date.now() < 24 * 3600000) throw new PaymentFlowError('Đổi lịch tối đa một lần và báo trước ít nhất 24 giờ', 409);
+      const quote = await quoteRental(tx, booking.cameraItemId, input.startDate, input.endDate, input.startTime, input.endTime, booking.id);
+      if (!quote.view.available) throw new PaymentFlowError(quote.view.unavailableReason || 'Lịch mới không còn trống', 409);
+      if (quote.dates.days !== booking.totalDays || quote.view.rentalFee !== booking.totalRentalFee || (booking.dueAt && quote.dates.dueAt.getTime() - quote.dates.pickupAt.getTime() !== booking.dueAt.getTime() - booking.pickupAt.getTime())) throw new PaymentFlowError('Lượt đổi miễn phí giữ nguyên thời lượng và phí thuê; liên hệ Filmiliar nếu muốn thay đổi', 409);
+      await tx.rentalBooking.update({ where: { id: bookingId }, data: { startDate: quote.dates.start, endDate: quote.dates.end, pickupAt: quote.dates.pickupAt, dueAt: quote.dates.dueAt, rescheduleCount: { increment: 1 } } });
       await refreshUnitStatus(tx, booking.cameraItemId);
     });
   }
@@ -137,7 +155,7 @@ export class RentalOperations {
       const cancelling = booking.status === BookingStatus.CANCELLED && !booking.handoverAt;
       if (!cancelling && (booking.status !== BookingStatus.COMPLETED || !booking.inspectedAt)) throw new PaymentFlowError('Cần nghiệm thu hoặc hủy trước bàn giao trước khi hoàn tiền', 409);
       if (!cancelling && booking.deductionAmount > 0 && booking.deductionDecision !== 'ACCEPTED') throw new PaymentFlowError('Cần khách đồng ý khoản khấu trừ trước khi hoàn phần còn lại', 409);
-      const amount = cancelling && snapshot(booking).cancellationRefund !== 'DEPOSIT_ONLY' ? payment.amount : booking.depositAmount - (cancelling ? 0 : booking.deductionAmount);
+      const amount = cancelling ? cancellationRefundAmount(booking) : booking.depositAmount - booking.deductionAmount;
       if (!Number.isSafeInteger(amount) || amount < 0 || amount > payment.amount) throw new PaymentFlowError('Số tiền hoàn không hợp lệ', 409);
       if (amount === 0) {
         if (booking.depositStatus !== DepositStatus.DEDUCTED && booking.depositStatus !== DepositStatus.REFUNDED) {

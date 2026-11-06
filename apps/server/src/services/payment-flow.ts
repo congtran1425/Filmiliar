@@ -7,6 +7,7 @@ import type { Prisma } from '@prisma/client';
 import type { ZaloPayCallbackData, ZaloPayGateway } from './zalopay.service.js';
 import { PaymentFlowError, parseRentalDates, vietnamDate, isAllocationConflict } from './rental-domain.js';
 import { lockBooking, lockUnit, quoteRental, refreshUnitStatus } from './rental-availability.js';
+import { scheduledRental } from './approved-policy.js';
 export { PaymentFlowError, parseRentalDates } from './rental-domain.js';
 
 const ATTEMPT_LIFETIME_MS = 15 * 60 * 1000;
@@ -22,6 +23,8 @@ export interface CreateRentalPaymentInput {
   cameraItemId: number;
   startDate: string;
   endDate: string;
+  startTime?: string;
+  endTime?: string;
   clientRequestId: string;
   quoteHash?: string;
   termsAccepted?: boolean;
@@ -46,6 +49,8 @@ function toClientView(attempt: AttemptViewSource) {
     serialNumber: booking.cameraItem.serialNumber,
     startDate: booking.startDate.toISOString().slice(0, 10),
     endDate: booking.endDate.toISOString().slice(0, 10),
+    pickupAt: booking.pickupAt?.toISOString() || null,
+    dueAt: booking.dueAt?.toISOString() || null,
     totalDays: booking.totalDays,
     rentalFee: booking.totalRentalFee,
     depositAmount: booking.depositAmount,
@@ -63,12 +68,14 @@ export class SandboxPaymentFlow {
     return toClientView(attempt);
   }
 
-  async getActiveForUnit(userId: string, cameraItemId: number, startDate?: string, endDate?: string) {
+  async getActiveForUnit(userId: string, cameraItemId: number, startDate?: string, endDate?: string, startTime?: string, endTime?: string) {
     const dates = startDate && endDate ? parseRentalDates(startDate, endDate) : null;
+    const schedule = startDate && endDate && (startTime || endTime) ? scheduledRental(startDate, endDate, startTime, endTime) : null;
     const attempt = await this.prisma.paymentAttempt.findFirst({
       where: {
         userId, booking: { cameraItemId, status: { notIn: [BookingStatus.COMPLETED, BookingStatus.CANCELLED] },
-          ...(dates ? { startDate: dates.start, endDate: dates.end } : {}) },
+          ...(dates ? { startDate: dates.start, endDate: dates.end } : {}),
+          ...(schedule ? { OR: [{ pickupAt: schedule.pickupAt, dueAt: schedule.dueAt }, ...(schedule.startTime === '08:00' && schedule.endTime === '08:00' ? [{ pickupAt: null, dueAt: null }] : [])] } : {}) },
         status: { in: [PaymentAttemptStatus.CREATING, PaymentAttemptStatus.WAITING, PaymentAttemptStatus.PAID, PaymentAttemptStatus.REVIEW] }
       }, include: attemptInclude, orderBy: { createdAt: 'desc' }
     });
@@ -76,7 +83,7 @@ export class SandboxPaymentFlow {
   }
 
   async create(userId: string, input: CreateRentalPaymentInput) {
-    const { start, end, days } = parseRentalDates(input.startDate, input.endDate);
+    const { start, end, days, pickupAt, dueAt } = scheduledRental(input.startDate, input.endDate, input.startTime, input.endTime);
     const existing = await this.prisma.paymentAttempt.findUnique({
       where: { userId_clientRequestId: { userId, clientRequestId: input.clientRequestId } },
       include: attemptInclude
@@ -84,7 +91,7 @@ export class SandboxPaymentFlow {
     if (existing) {
       if (existing.booking.cameraItemId !== input.cameraItemId ||
           existing.booking.startDate.getTime() !== start.getTime() ||
-          existing.booking.endDate.getTime() !== end.getTime()) {
+          existing.booking.endDate.getTime() !== end.getTime() || (existing.booking.pickupAt && existing.booking.pickupAt.getTime() !== pickupAt.getTime()) || (existing.booking.dueAt && existing.booking.dueAt.getTime() !== dueAt.getTime())) {
         throw new PaymentFlowError('Mã yêu cầu đã dùng cho thông tin thuê khác', 409);
       }
       return toClientView(existing);
@@ -98,7 +105,7 @@ export class SandboxPaymentFlow {
     try {
       const created = await this.prisma.$transaction(async (tx) => {
         await lockUnit(tx, input.cameraItemId);
-        const quote = await quoteRental(tx, input.cameraItemId, input.startDate, input.endDate);
+        const quote = await quoteRental(tx, input.cameraItemId, input.startDate, input.endDate, input.startTime, input.endTime);
         const item = quote.unit;
         if (!quote.view.available) throw new PaymentFlowError(quote.view.unavailableReason || 'Lịch thuê không còn trống', 409);
         if (input.quoteHash && input.quoteHash !== quote.view.quoteHash) throw new PaymentFlowError('Giá hoặc chính sách vừa thay đổi. Vui lòng xem lại trước khi thanh toán.', 409);
@@ -108,12 +115,13 @@ export class SandboxPaymentFlow {
           data: {
             bookingCode: `BK-SB-${vietnamDate().replace(/-/g, '').slice(2)}-${crypto.randomBytes(5).toString('hex')}`,
             userId, cameraItemId: item.id, startDate: start, endDate: end,
+            pickupAt, dueAt,
             totalDays: days, dailyRate: item.product.dailyRentalRate, totalRentalFee: fee,
             depositAmount: item.depositAmount, depositStatus: DepositStatus.PENDING,
             status: BookingStatus.PENDING_PAYMENT, deliveryMethod: 'STORE_PICKUP',
             returnBufferDays: quote.policy.returnBufferDays,
             termsAcceptedAt: input.termsAccepted ? new Date() : null,
-            policySnapshot: { version: quote.policy.version, terms: quote.policy.terms, cancellationRefund: quote.policy.cancellationRefund, returnBufferDays: quote.policy.returnBufferDays }
+            policySnapshot: { version: quote.policy.version, terms: quote.policy.terms, cancellationRefund: quote.policy.cancellationRefund, returnBufferDays: quote.policy.returnBufferDays, rules: quote.policy.rules }
           }
         });
         const transId = newAppTransId();
@@ -136,7 +144,7 @@ export class SandboxPaymentFlow {
       if (raced) {
         if (raced.booking.cameraItemId !== input.cameraItemId ||
             raced.booking.startDate.getTime() !== start.getTime() ||
-            raced.booking.endDate.getTime() !== end.getTime()) {
+            raced.booking.endDate.getTime() !== end.getTime() || (raced.booking.pickupAt && raced.booking.pickupAt.getTime() !== pickupAt.getTime()) || (raced.booking.dueAt && raced.booking.dueAt.getTime() !== dueAt.getTime())) {
           throw new PaymentFlowError('Mã yêu cầu đã dùng cho thông tin thuê khác', 409);
         }
         return toClientView(raced);

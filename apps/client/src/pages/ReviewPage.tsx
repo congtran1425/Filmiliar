@@ -4,7 +4,7 @@ import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { formatVnd } from '../lib/catalog';
 import { useProduct } from '../lib/useProduct';
 import { apiRequest, useSession } from '../lib/session';
-import { useRentalQuote } from '../lib/rental';
+import { useRentalQuote, cancellationDescription } from '../lib/rental';
 import { PaymentQrModal } from '../components/PaymentQrModal';
 import { RentalSchedule } from '../components/RentalSchedule';
 import { normalizePhone } from '../lib/phone';
@@ -18,14 +18,16 @@ export function ReviewPage() {
   const unit = product?.units.find(item => String(item.id) === params.get('may'));
   const [startDate, setStartDate] = useState(params.get('start') || '');
   const [endDate, setEndDate] = useState(params.get('end') || '');
-  const { quote, loading: checking, error: quoteError, refresh } = useRentalQuote(mode === 'thue' ? unit?.id : undefined, startDate, endDate);
+  const [startTime, setStartTime] = useState(params.get('startTime') || '08:00');
+  const [endTime, setEndTime] = useState(params.get('endTime') || '08:00');
+  const { quote, loading: checking, error: quoteError, refresh } = useRentalQuote(mode === 'thue' ? unit?.id : undefined, startDate, endDate, startTime, endTime);
   const [acceptedHash, setAcceptedHash] = useState('');
   const [enabled, setEnabled] = useState(false);
   const [active, setActive] = useState<{ key: string; data: ActivePayment | null }>({ key: '', data: null });
   const [showPayment, setShowPayment] = useState<{ quoteHash: string; termsAccepted: boolean } | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const { user, state } = useSession();
-  const activeKey = `${user?.id}:${unit?.id}:${startDate}:${endDate}:${refreshTick}`;
+  const activeKey = `${user?.id}:${unit?.id}:${startDate}:${endDate}:${startTime}:${endTime}:${refreshTick}`;
   const currentPayment = active.key === activeKey ? active.data : null;
   const closePayment = useCallback(() => { setShowPayment(null); setRefreshTick(value => value + 1); }, []);
   useEffect(() => { refresh(); }, [refreshTick]);
@@ -40,7 +42,7 @@ export function ReviewPage() {
   useEffect(() => {
     if (!user || !unit || mode !== 'thue' || !startDate || !endDate || !enabled) return;
     const controller = new AbortController();
-    apiRequest<{ data: ActivePayment | null }>(`/api/payment/active/${unit.id}?${new URLSearchParams({ startDate, endDate })}`, { signal: controller.signal, cache: 'no-store' })
+    apiRequest<{ data: ActivePayment | null }>(`/api/payment/active/${unit.id}?${new URLSearchParams({ startDate, endDate, startTime, endTime })}`, { signal: controller.signal, cache: 'no-store' })
       .then(result => { if (!controller.signal.aborted) setActive({ key: activeKey, data: result.data }); })
       .catch(() => { if (!controller.signal.aborted) setActive({ key: activeKey, data: null }); });
     return () => controller.abort();
@@ -62,8 +64,8 @@ export function ReviewPage() {
       <div className="min-w-0 space-y-5">
         <section className="rounded-2xl border border-film-border bg-film-card p-4 sm:p-5"><h2 className="font-bold text-white">{product.name}</h2><p className="mt-2 break-all text-sm text-slate-300">Serial {unit.serialNumber} · Ngoại hình {unit.conditionGrade}</p><p className="mt-3 text-xs leading-5 text-slate-400">Nhận máy trực tiếp. Đối chiếu tình trạng, phụ kiện và biên bản khi bàn giao.</p></section>
         {mode === 'thue' ? <>
-          <RentalSchedule unitId={unit.id} startDate={startDate} endDate={endDate} onChange={(start, end) => { setStartDate(start); setEndDate(end); setAcceptedHash(''); }} quote={quote} checking={checking} error={quoteError}/>
-          {quote && <section className="rounded-2xl border border-film-border bg-film-card p-4 sm:p-5"><h2 className="font-bold text-white">Quy định thuê · phiên bản {quote.policyVersion}</h2><p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-300">{quote.terms}</p><p className="mt-3 text-sm text-slate-300">Hủy trước bàn giao: {quote.cancellationRefund === 'FULL_PAYMENT' ? 'hoàn tiền thuê và tiền cọc' : 'hoàn tiền cọc; phí thuê không hoàn'}. Mức cọc áp dụng riêng cho chiếc máy, không giảm theo eKYC.</p><label className="mt-4 flex min-h-11 cursor-pointer items-start gap-3 border-t border-film-border pt-4 text-sm leading-6 text-white"><input type="checkbox" checked={accepted} onChange={event => setAcceptedHash(event.target.checked ? quote.quoteHash : '')} className="mt-1 h-5 w-5 shrink-0 accent-film-warm"/>Tôi đồng ý lịch thuê, mức cọc và quy định ở trên.</label></section>}
+          <RentalSchedule unitId={unit.id} startDate={startDate} endDate={endDate} onChange={(start, end) => { setStartDate(start); setEndDate(end); setAcceptedHash(''); }} startTime={startTime} endTime={endTime} onTimeChange={(start,end) => { setStartTime(start); setEndTime(end); setAcceptedHash(''); }} quote={quote} checking={checking} error={quoteError}/>
+          {quote && <section className="rounded-2xl border border-film-border bg-film-card p-4 sm:p-5"><h2 className="font-bold text-white">Quy định thuê · phiên bản {quote.policyVersion}</h2><p className="mt-3 text-sm leading-6 text-slate-300">{cancellationDescription(quote.cancellationRefund)} Mức cọc áp dụng riêng cho chiếc máy, không giảm theo eKYC.</p><details className="mt-4 text-sm text-slate-300"><summary className="min-h-11 cursor-pointer py-2 font-semibold text-film-warm">Đọc đầy đủ điều kiện thuê và hoàn cọc</summary><p className="mt-2 whitespace-pre-line leading-6">{quote.terms}</p></details><label className="mt-4 flex min-h-11 cursor-pointer items-start gap-3 border-t border-film-border pt-4 text-sm leading-6 text-white"><input type="checkbox" checked={accepted} onChange={event => setAcceptedHash(event.target.checked ? quote.quoteHash : '')} className="mt-1 h-5 w-5 shrink-0 accent-film-warm"/>Tôi đã đọc và đồng ý lịch thuê, mức cọc và điều kiện thuê ở trên.</label></section>}
         </> : <section className="rounded-2xl border border-film-border bg-film-card p-5 text-sm leading-6 text-slate-300"><h2 className="font-bold text-white">Hẹn xem máy trực tiếp</h2><p className="mt-3">Đối chiếu chiếc máy, phụ kiện, giá bán và điều kiện bảo hành trước khi quyết định mua.</p><Link to="/lien-he" className="mt-4 inline-flex min-h-11 items-center text-film-warm underline">Liên hệ Filmiliar</Link></section>}
       </div>
       <aside className="h-fit min-w-0 space-y-4 rounded-2xl border border-film-border bg-film-card p-4 md:sticky md:top-24 sm:p-5">
@@ -76,6 +78,6 @@ export function ReviewPage() {
         </>}
       </aside>
     </div>
-    {showPayment && <PaymentQrModal cameraItemId={unit.id} startDate={startDate} endDate={endDate} quoteHash={showPayment.quoteHash} termsAccepted={showPayment.termsAccepted} onClose={closePayment}/>}
+    {showPayment && <PaymentQrModal cameraItemId={unit.id} startDate={startDate} endDate={endDate} startTime={startTime} endTime={endTime} quoteHash={showPayment.quoteHash} termsAccepted={showPayment.termsAccepted} onClose={closePayment}/>}
   </main>;
 }

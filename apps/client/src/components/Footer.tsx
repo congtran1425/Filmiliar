@@ -2,6 +2,7 @@ import React from 'react';
 import { ShieldCheck, RotateCcw, BookOpen } from 'lucide-react';
 import { InfoTabType } from './InfoPagesModal';
 import { Link } from 'react-router-dom';
+import { filmiliarContact, filmiliarCopyright } from '../content/filmiliar';
 
 interface FooterProps {
   onOpenInfo: (tab: InfoTabType) => void;
@@ -27,9 +28,6 @@ export const Footer: React.FC<FooterProps> = ({ onOpenInfo, onOpenQuiz, onScroll
               Khám phá máy ảnh second-hand để thuê hoặc mua. Thông tin về tình trạng thiết bị được hiển thị khi đã có hồ sơ kiểm định.
             </p>
             <nav aria-label="Đường dẫn chính" className="flex flex-wrap gap-x-3 gap-y-1 text-xs"><Link to="/quy-trinh" className="hover:text-white">Quy trình</Link><Link to="/san-pham" className="hover:text-white">Sản phẩm</Link><Link to="/cam-nang" className="hover:text-white">Cẩm nang</Link><Link to="/lien-he" className="hover:text-white">Liên hệ</Link></nav>
-            <p className="text-[11px] text-slate-500 font-mono">
-              Dự án môn học của Nhóm 1 · UEH.
-            </p>
           </div>
 
           {/* Col 2 */}
@@ -71,6 +69,9 @@ export const Footer: React.FC<FooterProps> = ({ onOpenInfo, onOpenQuiz, onScroll
           <div className="space-y-2.5">
             <h4 className="text-xs font-semibold text-white uppercase tracking-wider">Hỗ trợ & thông tin</h4>
             <div className="space-y-2 text-slate-400">
+              <a href={filmiliarContact.phoneHref} className="flex min-h-11 items-center text-sm text-white hover:text-film-warm">{filmiliarContact.phone}</a>
+              <a href={`mailto:${filmiliarContact.email}`} className="flex min-h-11 min-w-0 items-center break-all text-xs leading-6 hover:text-white">{filmiliarContact.email}</a>
+              <a href={filmiliarContact.mapsUrl} target="_blank" rel="noopener noreferrer" className="flex min-h-11 items-center text-xs leading-6 hover:text-white">{filmiliarContact.address}</a>
               <button
                 onClick={() => onOpenInfo('CONTACT')}
                 className="flex items-start space-x-2 text-left hover:text-white transition-colors"
@@ -96,11 +97,12 @@ export const Footer: React.FC<FooterProps> = ({ onOpenInfo, onOpenQuiz, onScroll
         </div>
 
         <div className="mt-8 pt-6 border-t border-slate-900 flex flex-col sm:flex-row justify-between items-center text-[11px] text-slate-500">
-          <div>© 2026 Filmiliar. Bản quyền thuộc Nhóm 1 - Khóa TMĐT UEH.</div>
+          <div>{filmiliarCopyright}</div>
           <div className="flex space-x-4 mt-2 sm:mt-0">
             <button onClick={() => onOpenInfo('DEPOSIT_POLICY')} className="hover:underline">
               Thông tin đặt cọc
             </button>
+            <Link to="/thong-tin/chinh-sach" className="hover:underline">Chính sách thuê và bán</Link>
             <button onClick={() => onOpenInfo('CONTACT')} className="hover:underline">
               Liên hệ
             </button>

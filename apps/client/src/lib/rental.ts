@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { apiRequest } from './session';
 
-export type RentalPolicy = { id: string; version: number; returnBufferDays: number; cancellationRefund: 'FULL_PAYMENT' | 'DEPOSIT_ONLY'; terms: string; updatedAt: string };
+export type RentalPolicy = { id: string; version: number; returnBufferDays: number; cancellationRefund: 'FULL_PAYMENT' | 'DEPOSIT_ONLY' | 'TIMED'; terms: string; updatedAt: string };
+export const cancellationDescription = (mode?: string) => mode === 'TIMED' ? 'Hủy ≥48 giờ: hoàn toàn bộ phí thuê và cọc; 24–48 giờ: hoàn 50% phí thuê và toàn bộ cọc; dưới 24 giờ: hoàn cọc.' : mode === 'FULL_PAYMENT' ? 'Hủy trước bàn giao: hoàn phí thuê và cọc.' : 'Hủy trước bàn giao: hoàn cọc, không hoàn phí thuê.';
 export type RentalQuote = {
   cameraItemId: number; serialNumber: string; startDate: string; endDate: string; totalDays: number;
   dailyRate: number; rentalFee: number; depositAmount: number; totalAmount: number;
   returnBufferDays: number; blockedUntil: string; available: boolean; unavailableReason: string | null;
   policyVersion: number; terms: string; cancellationRefund: string; quoteHash: string; checkedAt: string;
+  startTime: string; endTime: string; pickupAt: string; dueAt: string;
 };
 export type Refund = { id: string; mRefundId: string; providerRefundId: string | null; amount: number; purpose: string;
   status: 'CREATING' | 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'REVIEW'; activeBookingId: string | null;
@@ -14,6 +16,7 @@ export type Refund = { id: string; mRefundId: string; providerRefundId: string |
 export type RentalBooking = {
   id: string; bookingCode: string; userId: string; status: string; depositStatus: string; startDate: string; endDate: string;
   totalDays: number; totalRentalFee: number; depositAmount: number; handoverAt: string | null; returnedAt: string | null; inspectedAt: string | null;
+  pickupAt: string | null; dueAt: string | null; cancelledAt: string | null; rescheduleCount: number; suggestedLateFee: number; cancellationRefundAmount: number;
   handoverRecord: { accessories: string; condition: string; receiptReference: string; shutterCount: number | null; note: string } | null;
   returnRecord: { condition: string; shutterCount: number | null; releaseToStock: boolean; note: string } | null;
   deductionAmount: number; deductionReason: string | null; deductionDecision: string; returnInspectionNote: string | null;
@@ -33,21 +36,21 @@ export const addDays = (day: string, days: number) => {
 };
 export const showDay = (day: string) => day.slice(0, 10).split('-').reverse().join('/');
 
-export function useRentalQuote(unitId: number | undefined, startDate: string, endDate: string) {
+export function useRentalQuote(unitId: number | undefined, startDate: string, endDate: string, startTime = '08:00', endTime = '08:00') {
   const [tick, setTick] = useState(0);
-  const key = `${unitId}:${startDate}:${endDate}:${tick}`;
+  const key = `${unitId}:${startDate}:${endDate}:${startTime}:${endTime}:${tick}`;
   const valid = !!unitId && /^\d{4}-\d{2}-\d{2}$/.test(startDate) && /^\d{4}-\d{2}-\d{2}$/.test(endDate) && endDate > startDate;
   const [result, setResult] = useState<{ key: string; quote: RentalQuote | null; error: string }>({ key: '', quote: null, error: '' });
   useEffect(() => {
     if (!valid) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      apiRequest<{ data: RentalQuote }>(`/api/rental/quote/${unitId}?${new URLSearchParams({ startDate, endDate })}`, { signal: controller.signal, cache: 'no-store' })
+      apiRequest<{ data: RentalQuote }>(`/api/rental/quote/${unitId}?${new URLSearchParams({ startDate, endDate, startTime, endTime })}`, { signal: controller.signal, cache: 'no-store' })
         .then(({ data }) => { if (!controller.signal.aborted) setResult({ key, quote: data, error: '' }); })
         .catch(cause => { if (!controller.signal.aborted) setResult({ key, quote: null, error: cause instanceof Error ? cause.message : 'Không kiểm tra được lịch' }); });
     }, 180);
     return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [key, valid, unitId, startDate, endDate]);
+  }, [key, valid, unitId, startDate, endDate, startTime, endTime]);
   useEffect(() => {
     const refresh = () => setTick(value => value + 1);
     window.addEventListener('focus', refresh);

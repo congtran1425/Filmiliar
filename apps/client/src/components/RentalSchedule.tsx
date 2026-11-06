@@ -5,9 +5,10 @@ import { addDays, showDay, todayVN } from '../lib/rental';
 import type { RentalQuote } from '../lib/rental';
 
 type Calendar = { cameraItemId: number; status: string; ranges: { startDate: string; endDate: string; kind: string }[] };
-export function RentalSchedule({ unitId, startDate, endDate, onChange, quote, checking, error }: {
+export function RentalSchedule({ unitId, startDate, endDate, onChange, quote, checking, error, startTime = '08:00', endTime = '08:00', onTimeChange }: {
   unitId: number; startDate: string; endDate: string; onChange: (start: string, end: string) => void;
   quote: RentalQuote | null; checking: boolean; error: string;
+  startTime?: string; endTime?: string; onTimeChange?: (startTime: string, endTime: string) => void;
 }) {
   const prefix = useId();
   const today = todayVN();
@@ -41,7 +42,9 @@ export function RentalSchedule({ unitId, startDate, endDate, onChange, quote, ch
     <div className="mt-3 grid grid-cols-2 gap-3">
       <label className="min-w-0 text-xs text-slate-300" htmlFor={`${prefix}-start`}>Ngày nhận máy<input id={`${prefix}-start`} type="date" className={input} min={today} max={maxStart} value={startDate} onChange={e => onChange(e.target.value, endDate && endDate > e.target.value ? endDate : '')}/></label>
       <label className="min-w-0 text-xs text-slate-300" htmlFor={`${prefix}-end`}>Ngày trả máy<input id={`${prefix}-end`} type="date" className={input} min={startDate ? addDays(startDate, 1) : addDays(today, 1)} max={startDate ? addDays(startDate, 30) : addDays(today, 120)} value={endDate} onChange={e => onChange(startDate, e.target.value)}/></label>
+      {onTimeChange && <><label className="min-w-0 text-xs text-slate-300" htmlFor={`${prefix}-start-time`}>Giờ nhận<input id={`${prefix}-start-time`} type="time" min="08:00" max="20:00" step="60" className={input} value={startTime} onChange={e => onTimeChange(e.target.value, endTime)}/></label><label className="min-w-0 text-xs text-slate-300" htmlFor={`${prefix}-end-time`}>Giờ trả<input id={`${prefix}-end-time`} type="time" min="08:00" max="20:00" step="60" className={input} value={endTime} onChange={e => onTimeChange(startTime, e.target.value)}/></label></>}
     </div>
+    {onTimeChange && <p className="mt-3 text-xs leading-6 text-slate-400">Giờ Việt Nam · 08:00–20:00. Tiền thuê tính theo 24 giờ, phần lẻ làm tròn lên một ngày.</p>}
     <div className="mt-4 flex items-center justify-between gap-2">
       <button type="button" aria-label="Tháng trước" disabled={monthOffset === 0} onClick={() => setMonthOffset(v => v - 1)} className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-film-border disabled:opacity-30"><ChevronLeft size={18}/></button>
       <p className="text-sm font-semibold text-white">{new Intl.DateTimeFormat('vi-VN', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(month)}</p>

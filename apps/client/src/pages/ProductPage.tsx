@@ -6,6 +6,7 @@ import { useProduct } from '../lib/useProduct';
 import { useCart } from '../lib/CartContext';
 import { useRentalQuote } from '../lib/rental';
 import { RentalSchedule } from '../components/RentalSchedule';
+import { UnitPassport } from '../components/UnitPassport';
 
 const unitStatus: Record<CameraUnit['status'], string> = {
   AVAILABLE: 'Có trong kho',
@@ -19,10 +20,12 @@ export function ProductPage() {
   const { slug } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const { product, loading, error } = useProduct(slug);
-  const selected = product?.units.find(unit => String(unit.id) === searchParams.get('may')) || product?.units.find(unit => unit.status === 'AVAILABLE') || product?.units[0];
+  const selected = product?.units.find(unit => String(unit.id) === searchParams.get('may')) || product?.units.find(unit => unit.passport && unit.status === 'AVAILABLE') || product?.units.find(unit => unit.status === 'AVAILABLE') || product?.units[0];
   const [startDate, setStartDate] = useState(searchParams.get('start') || '');
   const [endDate, setEndDate] = useState(searchParams.get('end') || '');
-  const { quote, loading: checking, error: quoteError } = useRentalQuote(selected?.id, startDate, endDate);
+  const [startTime, setStartTime] = useState(searchParams.get('startTime') || '08:00');
+  const [endTime, setEndTime] = useState(searchParams.get('endTime') || '08:00');
+  const { quote, loading: checking, error: quoteError } = useRentalQuote(selected?.id, startDate, endDate, startTime, endTime);
   const [specsOpen, setSpecsOpen] = useState(false);
   const cart = useCart();
   const [addError, setAddError] = useState<string | null>(null);
@@ -52,7 +55,7 @@ export function ProductPage() {
   }
 
   const reviewPath = (mode: 'thue' | 'mua') =>
-    `/thiet-bi/${product.slug}/xem-lai/${mode}?${new URLSearchParams({ may: String(selected?.id), start: startDate, end: endDate })}`;
+    `/thiet-bi/${product.slug}/xem-lai/${mode}?${new URLSearchParams({ may: String(selected?.id), start: startDate, end: endDate, startTime, endTime })}`;
   const selectedAngleIndex = selectedPhoto?.slug === product.slug ? selectedPhoto.index : 0;
 
   return (
@@ -277,7 +280,8 @@ export function ProductPage() {
           </section>
 
           {/* Condition Facts for Selected Unit */}
-          {selected && (
+          {selected?.passport && <UnitPassport unit={selected}/>}
+          {selected && !selected.passport && (
             <section className="rounded-2xl border border-film-border bg-film-card p-4 sm:p-5">
               <div className="flex items-start gap-2.5">
                 <Info className="mt-0.5 h-4 w-4 shrink-0 text-film-warm" />
@@ -324,7 +328,7 @@ export function ProductPage() {
             </section>
           )}
 
-          {selected && <RentalSchedule unitId={selected.id} startDate={startDate} endDate={endDate} onChange={(start, end) => { setStartDate(start); setEndDate(end); }} quote={quote} checking={checking} error={quoteError}/>}
+          {selected && <RentalSchedule unitId={selected.id} startDate={startDate} endDate={endDate} onChange={(start, end) => { setStartDate(start); setEndDate(end); }} startTime={startTime} endTime={endTime} onTimeChange={(start,end) => { setStartTime(start); setEndTime(end); }} quote={quote} checking={checking} error={quoteError}/>}
 
           {/* Desktop Pricing & Review Navigation Section */}
           <section className="hidden lg:block rounded-2xl border border-film-border bg-film-card p-5">
