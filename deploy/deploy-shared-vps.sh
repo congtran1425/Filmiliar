@@ -3,17 +3,19 @@ set -euo pipefail
 
 repo=/opt/apps/filmiliar/repo
 config=/opt/apps/filmiliar/config/.env
+state=/opt/apps/filmiliar/config/deployment.env
 compose="$repo/compose.shared-vps.yaml"
 test -f "$config" || { echo "Missing private Filmiliar env." >&2; exit 1; }
+test -f "$state" || { echo "Missing deployment.env with the prebuilt API image. Build images in CI, not on this VPS." >&2; exit 1; }
 test -f "$compose" || { echo "Missing Filmiliar Compose file." >&2; exit 1; }
 
-docker_compose=(sudo -n docker compose --env-file "$config" -f "$compose" --project-directory "$repo")
+docker_compose=(sudo -n docker compose --env-file "$config" --env-file "$state" -f "$compose" --project-directory "$repo")
 "${docker_compose[@]}" config --quiet
 "${docker_compose[@]}" up -d db
-revision=$(git -C "$repo" rev-parse HEAD)
-"${docker_compose[@]}" build --build-arg APP_REVISION="$revision" api
-"${docker_compose[@]}" run --rm --no-deps --user root api npx prisma migrate deploy --schema=apps/server/prisma/schema.prisma
-"${docker_compose[@]}" up -d api
+"${docker_compose[@]}" pull api
+if [[ -x /usr/local/sbin/filmiliar-backup ]]; then sudo -n /usr/local/sbin/filmiliar-backup; fi
+"${docker_compose[@]}" run --rm --no-deps --interactive=false -T --user root api node node_modules/prisma/build/index.js migrate deploy --schema=apps/server/prisma/schema.prisma
+"${docker_compose[@]}" up -d --no-build api
 "${docker_compose[@]}" ps
 ready=false
 for attempt in {1..20}; do

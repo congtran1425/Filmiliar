@@ -119,7 +119,7 @@ docker exec filmiliar-db-1 pg_dump -U filmiliar -d filmiliar -Fc > "$backup.tmp"
 docker exec -i filmiliar-db-1 pg_restore --list < "$backup.tmp" >/dev/null
 mv "$backup.tmp" "$backup"
 echo "Database backup verified: $backup"
-"${compose[@]}" run --rm --no-deps --user root api npx prisma migrate deploy --schema=apps/server/prisma/schema.prisma
+"${compose[@]}" run --rm --no-deps --interactive=false -T --user root api node node_modules/prisma/build/index.js migrate deploy --schema=apps/server/prisma/schema.prisma
 
 switched=true
 "${compose[@]}" up -d --no-deps --no-build --pull never api

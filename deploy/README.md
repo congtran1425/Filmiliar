@@ -1,5 +1,8 @@
 # CI/CD Filmiliar
 
+For a shared 1 GiB VPS, read [SMALL_VPS.md](SMALL_VPS.md) before deploying.
+Build API images in GitHub Actions; the VPS only pulls and runs verified images.
+
 ## Pipeline
 
 Workflow: [`.github/workflows/ci-cd.yml`](../.github/workflows/ci-cd.yml).

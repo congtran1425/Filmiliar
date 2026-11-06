@@ -8,6 +8,26 @@ services:
       POSTGRES_DB: filmiliar
       POSTGRES_USER: filmiliar
       POSTGRES_PASSWORD: ${FILMILIAR_DB_PASSWORD:?Set FILMILIAR_DB_PASSWORD in the private VPS env file}
+    command:
+      - postgres
+      - -c
+      - max_connections=20
+      - -c
+      - shared_buffers=32MB
+      - -c
+      - work_mem=2MB
+      - -c
+      - maintenance_work_mem=16MB
+      - -c
+      - effective_cache_size=128MB
+      - -c
+      - max_wal_size=256MB
+      - -c
+      - min_wal_size=80MB
+      - -c
+      - max_parallel_workers_per_gather=0
+      - -c
+      - jit=off
     volumes:
       - filmiliar_db:/var/lib/postgresql/data
     healthcheck:
@@ -15,8 +35,15 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
-    mem_limit: 768m
-    cpus: 0.5
+    mem_limit: ${FILMILIAR_DB_MEMORY:-160m}
+    memswap_limit: ${FILMILIAR_DB_MEMORY_SWAP:-320m}
+    cpus: ${FILMILIAR_DB_CPUS:-0.3}
+    pids_limit: 80
+    logging:
+      driver: local
+      options:
+        max-size: "5m"
+        max-file: "3"
     security_opt:
       - no-new-privileges:true
 
@@ -32,7 +59,11 @@ services:
     environment:
       NODE_ENV: production
       PORT: 5000
-      DATABASE_URL: postgresql://filmiliar:${FILMILIAR_DB_PASSWORD}@db:5432/filmiliar?schema=public
+      DATABASE_URL: postgresql://filmiliar:${FILMILIAR_DB_PASSWORD}@db:5432/filmiliar?schema=public&connection_limit=3&pool_timeout=20
+      NODE_OPTIONS: ${FILMILIAR_NODE_OPTIONS:---max-old-space-size=128}
+      UV_THREADPOOL_SIZE: "2"
+      MALLOC_ARENA_MAX: "2"
+      VIPS_CONCURRENCY: "1"
       JWT_SECRET: ${FILMILIAR_JWT_SECRET:?Set FILMILIAR_JWT_SECRET in the private VPS env file}
       RESEND_API_KEY: ${FILMILIAR_RESEND_API_KEY:-}
       RECOVERY_EMAIL_FROM: ${FILMILIAR_RECOVERY_EMAIL_FROM:-no-reply@mail-filmiliar.congtc145.id.vn}
@@ -55,8 +86,15 @@ services:
       - "127.0.0.1:3081:5000"
     volumes:
       - filmiliar_uploads:/app/uploads
-    mem_limit: 768m
-    cpus: 1.0
+    mem_limit: ${FILMILIAR_API_MEMORY:-224m}
+    memswap_limit: ${FILMILIAR_API_MEMORY_SWAP:-448m}
+    cpus: ${FILMILIAR_API_CPUS:-0.5}
+    pids_limit: 100
+    logging:
+      driver: local
+      options:
+        max-size: "5m"
+        max-file: "3"
     cap_drop:
       - ALL
     security_opt:
