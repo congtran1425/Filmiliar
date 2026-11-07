@@ -11,6 +11,7 @@ import { uploadService } from './services/upload.service.js';
 import { createSessionToken, getSessionUser, hashPassword, verifyPassword } from './auth.js';
 import { registerPaymentRoutes } from './routes/payment.js';
 import { registerRentalRoutes } from './routes/rental.js';
+import { registerQuizRoutes } from './routes/quiz.js';
 import { registerBundleRoutes } from './routes/bundle.js';
 import { visibleRentalWhere, rentalListView } from './services/bundle-list.js';
 import { normalizePhone } from './phone.js';
@@ -244,77 +245,8 @@ app.get('/api/passport/:serial', async (req: Request, res: Response) => {
   }
 });
 
-// 4. Camera Match Quiz Recommendation Engine
-app.post('/api/quiz/recommend', async (req: Request, res: Response) => {
-  try {
-    const { purpose, experienceLevel, budgetRange } = req.body;
-
-    const allProducts = await prisma.product.findMany({
-      include: { units: true }
-    });
-
-    let matchedProduct = allProducts[0];
-    let action: 'RENT' | 'BUY' = 'RENT';
-    let reason = '';
-
-    if (purpose === 'CONCERT' || purpose === 'TRAVEL_SHORT') {
-      action = 'RENT';
-      // Match Sony Alpha A6700 or Fujifilm X-T50
-      matchedProduct = allProducts.find(p => p.slug === 'sony-alpha-a6700') || allProducts[0];
-      reason = 'Nhu cầu đi concert hoặc du lịch sự kiện cần khả năng lấy nét AI nhận diện chủ thể cực nhạy và chống rung mạnh mẽ. Thuê Sony Alpha A6700 giúp bạn bắt trọn từng khoảnh khắc idol mà chi phí chỉ bằng 1/100 giá mua mới!';
-    } else if (purpose === 'TIKTOK_VLOG') {
-      action = 'RENT';
-      // Match Sony ZV-E10 or Canon EOS M50
-      matchedProduct = allProducts.find(p => p.slug === 'sony-zv-e10' || p.slug === 'canon-eos-m50') || allProducts[0];
-      reason = 'Sony ZV-E10 / Canon EOS M50 cực kỳ nhỏ gọn (dưới 390g), màn hình lật xoay selfie và tính năng làm đẹp da / Product Showcase, là lựa chọn số 1 cho các bạn làm video TikTok, vlog du lịch.';
-    } else if (purpose === 'LEARN_PHOTOGRAPHY' || experienceLevel === 'BEGINNER') {
-      if (budgetRange === 'HIGH') {
-        action = 'BUY';
-        matchedProduct = allProducts.find(p => p.slug === 'fujifilm-x-t50' || p.slug === 'fujifilm-x-t30-ii') || allProducts[0];
-        reason = 'Dòng máy Fujifilm sở hữu các bộ lọc màu film giả lập huyền thoại, giúp bạn có ngay bức ảnh đậm chất điện ảnh mà không cần tốn thời gian học chỉnh sửa hậu kỳ.';
-      } else {
-        action = 'RENT';
-        matchedProduct = allProducts.find(p => p.slug === 'canon-eos-m50' || p.slug === 'fujifilm-x-t100' || p.slug === 'nikon-z30') || allProducts[0];
-        reason = 'Khuyên bạn nên thuê trải nghiệm Canon EOS M50 / Nikon Z30 trong 2-3 ngày để làm quen với thao tác máy ảnh trước khi đầu tư số tiền lớn để sở hữu.';
-      }
-    } else {
-      matchedProduct = allProducts.find(p => p.slug === 'fujifilm-x-s10' || p.slug === 'canon-eos-r50') || allProducts[0];
-      reason = 'Bộ máy toàn diện có chống rung cảm biến IBIS, đáp ứng hoàn hảo cho chụp chân dung ngoại cảnh, kỷ yếu và du lịch với chi phí thuê cực kỳ tiết kiệm.';
-    }
-
-    const firstUnit = matchedProduct.units[0];
-    const formattedMatchedCamera = {
-      id: `prod-${matchedProduct.id}`,
-      name: matchedProduct.modelName,
-      slug: matchedProduct.slug,
-      brand: matchedProduct.brand,
-      category: matchedProduct.categoryName,
-      sensorType: matchedProduct.sensorType,
-      videoResolution: matchedProduct.videoSpecs || '4K',
-      weightGram: matchedProduct.weightGrams,
-      thumbnailUrl: matchedProduct.thumbnailUrl,
-      baseRentDailyPrice: matchedProduct.dailyRentalRate,
-      baseSalePrice: Number(matchedProduct.referenceUsedPrice),
-      conditionPercent: firstUnit ? (firstUnit.conditionGrade === 'A+' ? 99 : 98) : 98,
-      depositRequired: firstUnit?.depositAmount || 2000000,
-      currentShutter: firstUnit?.shutterCount || 0
-    };
-
-    res.json(serializeData({
-      success: true,
-      recommendation: {
-        action,
-        matchedCamera: formattedMatchedCamera,
-        reason,
-        adviceText: action === 'RENT'
-          ? '💡 Gợi ý: Thuê trải nghiệm theo dịp giúp bạn tối ưu chi phí và luôn được cầm máy đã qua kiểm định mới nhất.'
-          : '💡 Gợi ý: Máy second-hand tại Filmiliar đi kèm Hộ chiếu kỹ thuật và bảo hành 6 tháng an tâm tuyệt đối.'
-      }
-    }));
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
+// 4. Guided camera recommendations
+registerQuizRoutes(app, prisma);
 
 // 5. Tính giá thuê và cọc
 app.post('/api/rentals/calculate', async (req: Request, res: Response) => {

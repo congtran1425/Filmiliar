@@ -31,9 +31,4 @@ export interface Camera {
   passport: TechnicalPassport | null;
 }
 
-export interface QuizResult {
-  action: 'RENT' | 'BUY';
-  matchedCamera: Camera;
-  reason: string;
-  adviceText: string;
-}
+export type { QuizRecommendation as QuizResult } from '../lib/cameraQuiz';

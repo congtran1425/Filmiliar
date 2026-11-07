@@ -1,0 +1,16 @@
+{
+  "purposes": {
+    "TRAVEL": {
+      "label": "Du lịch & đời thường",
+      "tags": ["du lich", "da ngoai", "phong canh", "dao pho", "streetlife", "cafe"]
+    },
+    "PORTRAIT": { "label": "Chân dung & kỷ yếu", "tags": ["chan dung", "ky yeu", "studio"] },
+    "VIDEO": { "label": "Quay vlog & video", "tags": ["vlog", "tiktok", "video", "quay phim"] },
+    "CONCERT": { "label": "Concert & sân khấu", "tags": ["concert", "idol", "san khau"] },
+    "LEARNING": {
+      "label": "Làm quen nhiếp ảnh",
+      "tags": ["hoc chup", "hoc nhiep anh", "hoc quay", "nguoi moi", "sinh vien", "beginner", "lam quen"]
+    }
+  },
+  "budgets": { "RENT": [200000, 300000, 500000], "BUY": [10000000, 20000000, 30000000] }
+}

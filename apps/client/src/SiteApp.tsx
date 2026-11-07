@@ -77,7 +77,7 @@ export default function SiteApp() {
       <Footer onOpenInfo={openInfo} onOpenQuiz={() => setIsQuizOpen(true)} onScrollToCatalog={() => navigate('/san-pham')} />
       <CartDrawer />
 
-      <CameraMatchQuizModal isOpen={isQuizOpen} onClose={() => setIsQuizOpen(false)} onSelectCamera={(camera) => { setIsQuizOpen(false); navigate(`/thiet-bi/${camera.slug}`); }} />
+      <CameraMatchQuizModal isOpen={isQuizOpen} onClose={() => setIsQuizOpen(false)} />
     </div>
   );
 }

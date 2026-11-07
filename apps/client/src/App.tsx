@@ -229,7 +229,6 @@ export const App: React.FC = () => {
       <CameraMatchQuizModal
         isOpen={isQuizOpen}
         onClose={() => setIsQuizOpen(false)}
-        onSelectCamera={(c) => setSelectedBookingCamera(c)}
       />
 
       {/* 4. Rental Booking & ZaloPay Payment Modal */}
