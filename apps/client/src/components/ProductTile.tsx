@@ -20,7 +20,7 @@ export function ProductTile({ product, mode, dateSearch = '' }: ProductTileProps
         className="block focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-film-warm"
         aria-label={`Xem chi tiết và từng chiếc máy ${product.name}`}
       >
-        <div className="relative aspect-[16/10] sm:aspect-[4/3] bg-[#f5f2eb] overflow-hidden">
+        <div className="relative aspect-[16/10] sm:aspect-[4/3] bg-white overflow-hidden">
           {product.thumbnailUrl ? (
             <img
               src={product.thumbnailUrl}

@@ -94,7 +94,7 @@ export function ProductPage() {
 
             return (
               <figure className="overflow-hidden rounded-2xl border border-film-border bg-film-card shadow-sm">
-                <div className="aspect-[4/3] sm:aspect-[16/10] bg-[#f5f2eb] relative">
+                <div className="aspect-[4/3] sm:aspect-[16/10] bg-white relative">
                   {activeImage ? (
                     <img
                       src={activeImage}
